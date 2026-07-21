@@ -1,4 +1,4 @@
-package main
+package portfolio
 
 import (
 	"strings"
@@ -161,7 +161,9 @@ func (t *table) render() []string {
 		}
 	}
 
-	out := []string{renderRow(t.header, widths)}
+	// шапка + разделитель + строки данных
+	out := make([]string, 0, 2+len(t.rows))
+	out = append(out, renderRow(t.header, widths))
 
 	sep := make([]string, len(t.header))
 	for i := range sep {

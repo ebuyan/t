@@ -1,4 +1,4 @@
-package main
+package tinvest
 
 import (
 	"encoding/json"
@@ -16,6 +16,9 @@ type Dec struct {
 }
 
 const nanoScale = 1_000_000_000
+
+// DecUnits строит Dec из целых единиц (без дробной части).
+func DecUnits(units int64) Dec { return Dec{nanos: units * nanoScale} }
 
 // jsonNum принимает и число, и строку: REST-обёртка отдаёт int64 строкой.
 type jsonNum int64
@@ -39,7 +42,7 @@ func (n *jsonNum) UnmarshalJSON(b []byte) error {
 	}
 	v, err := strconv.ParseInt(s, 10, 64)
 	if err != nil {
-		return fmt.Errorf("не число: %q", s)
+		return fmt.Errorf("not a number: %q", s)
 	}
 	*n = jsonNum(v)
 	return nil
@@ -97,8 +100,35 @@ func (d Dec) String(prec int) string {
 // Add возвращает сумму.
 func (d Dec) Add(o Dec) Dec { return Dec{nanos: d.nanos + o.nanos} }
 
+// Sub возвращает разность.
+func (d Dec) Sub(o Dec) Dec { return Dec{nanos: d.nanos - o.nanos} }
+
 // IsZero — точное сравнение с нулём.
 func (d Dec) IsZero() bool { return d.nanos == 0 }
+
+// Sign возвращает -1, 0 или +1 в зависимости от знака.
+func (d Dec) Sign() int {
+	switch {
+	case d.nanos < 0:
+		return -1
+	case d.nanos > 0:
+		return 1
+	default:
+		return 0
+	}
+}
+
+// Cmp сравнивает два значения: -1 если d < o, +1 если d > o, иначе 0.
+func (d Dec) Cmp(o Dec) int {
+	switch {
+	case d.nanos < o.nanos:
+		return -1
+	case d.nanos > o.nanos:
+		return 1
+	default:
+		return 0
+	}
+}
 
 // Mul умножает два значения. Через big.Int: произведение нанодолей выходит
 // за int64 уже на суммах порядка миллиона рублей.
@@ -131,8 +161,8 @@ func (d Dec) Percent(whole Dec) Dec {
 	return Dec{nanos: n.Int64()}
 }
 
-// group расставляет пробелы в целой части числа: -1234567.89 → -1 234 567.89
-func group(s string) string {
+// Group расставляет пробелы в целой части числа: -1234567.89 → -1 234 567.89.
+func Group(s string) string {
 	sign := ""
 	if s != "" && (s[0] == '-' || s[0] == '+') {
 		sign, s = string(s[0]), s[1:]

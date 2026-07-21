@@ -1,10 +1,13 @@
-package main
+package portfolio
 
 import (
+	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"strings"
+
+	"tportfolio/internal/tinvest"
 )
 
 // roundStep — до какого шага округляется доходность в реестре.
@@ -13,16 +16,16 @@ const roundStep = 1000
 // registryEntry — одна запись реестра в формате inline-полей Dataview.
 type registryEntry struct {
 	date   string
-	income Dec
-	stock  Dec
-	gold   Dec
+	income tinvest.Dec
+	stock  tinvest.Dec
+	gold   tinvest.Dec
 }
 
-func newRegistryEntry(s *snapshot) registryEntry {
-	stock := s.stockYield.CeilTo(roundStep)
-	gold := s.goldYield.CeilTo(roundStep)
+func newRegistryEntry(s *Snapshot) registryEntry {
+	stock := s.StockYield.CeilTo(roundStep)
+	gold := s.GoldYield.CeilTo(roundStep)
 	return registryEntry{
-		date: s.date.Format("2006-01-02"),
+		date: s.Date.Format("2006-01-02"),
 		// income считаем от уже округлённых слагаемых, иначе в файле
 		// нарушится инвариант income = stock + gold.
 		income: stock.Add(gold),
@@ -40,31 +43,36 @@ func (e registryEntry) render() []string {
 	}
 }
 
-// updateRegistryFile добавляет запись в начало реестра. Как и файл долей,
+// UpdateRegistryFile добавляет запись в начало реестра. Как и файл долей,
 // пишется через бэкап и атомарную замену — файл живёт в синкающемся волте.
-func updateRegistryFile(path string, s *snapshot) error {
+func UpdateRegistryFile(ctx context.Context, path string, s *Snapshot, backup bool) error {
+	//nolint:gosec // путь берётся из доверенного env-конфига, не из пользовательского ввода
 	content, err := os.ReadFile(path)
 	if err != nil {
-		return fmt.Errorf("чтение %s: %w", path, err)
+		return fmt.Errorf("read %s: %w", path, err)
 	}
 
 	entry := newRegistryEntry(s)
 	updated := upsertEntry(string(content), entry)
 	if updated == string(content) {
-		log.Printf("реестр: запись за %s уже актуальна", entry.date)
+		slog.InfoContext(ctx, "registry entry already up to date", slog.String("date", entry.date))
 		return nil
 	}
 
-	backup, err := writeBackup(path, content)
+	bak, err := writeBackup(path, content, backup)
 	if err != nil {
 		return err
 	}
-	if backup != "" {
-		log.Printf("бэкап: %s", backup)
+	if bak != "" {
+		slog.InfoContext(ctx, "backup written", slog.String("path", bak))
 	}
 
-	log.Printf("реестр %s: income %s, stock %s, gold %s",
-		entry.date, entry.income.String(0), entry.stock.String(0), entry.gold.String(0))
+	slog.InfoContext(ctx, "registry updated",
+		slog.String("date", entry.date),
+		slog.String("income", entry.income.String(0)),
+		slog.String("stock", entry.stock.String(0)),
+		slog.String("gold", entry.gold.String(0)),
+	)
 
 	return writeAtomic(path, []byte(updated))
 }

@@ -1,4 +1,4 @@
-package main
+package tinvest
 
 import (
 	"encoding/json"
@@ -69,8 +69,8 @@ func TestGroup(t *testing.T) {
 		"999.99":     "999.99",
 	}
 	for in, want := range tests {
-		if got := group(in); got != want {
-			t.Errorf("group(%q) = %q, хотим %q", in, got, want)
+		if got := Group(in); got != want {
+			t.Errorf("Group(%q) = %q, хотим %q", in, got, want)
 		}
 	}
 }

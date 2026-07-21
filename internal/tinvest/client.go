@@ -1,4 +1,4 @@
-package main
+package tinvest
 
 import (
 	"bytes"
@@ -9,7 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"net/http"
 	"time"
 )
@@ -31,25 +31,25 @@ type Client struct {
 	http  *http.Client
 }
 
-func NewClient(token string) *Client {
+func NewClient(ctx context.Context, token string) *Client {
 	return &Client{
 		token: token,
 		http: &http.Client{
 			Timeout:   30 * time.Second,
-			Transport: &http.Transport{TLSClientConfig: &tls.Config{RootCAs: certPool()}},
+			Transport: &http.Transport{TLSClientConfig: &tls.Config{RootCAs: certPool(ctx)}},
 		},
 	}
 }
 
 // certPool — системные корни плюс корень НУЦ Минцифры.
-func certPool() *x509.CertPool {
+func certPool(ctx context.Context) *x509.CertPool {
 	pool, err := x509.SystemCertPool()
 	if err != nil {
-		log.Printf("системное хранилище сертификатов недоступно (%v), используем только вшитый корень", err)
+		slog.WarnContext(ctx, "system cert pool unavailable, using embedded root only", slog.Any("error", err))
 		pool = x509.NewCertPool()
 	}
 	if !pool.AppendCertsFromPEM(russianTrustedRootCA) {
-		log.Print("не удалось разобрать вшитый корневой сертификат НУЦ Минцифры")
+		slog.ErrorContext(ctx, "failed to parse embedded root certificate")
 	}
 	return pool
 }
@@ -58,7 +58,7 @@ func certPool() *x509.CertPool {
 func (c *Client) call(ctx context.Context, service, method string, req, resp any) error {
 	body, err := json.Marshal(req)
 	if err != nil {
-		return fmt.Errorf("сериализация запроса: %w", err)
+		return fmt.Errorf("marshal request: %w", err)
 	}
 
 	const attempts = 3
@@ -82,7 +82,7 @@ func (c *Client) call(ctx context.Context, service, method string, req, resp any
 			return err
 		}
 	}
-	return fmt.Errorf("%s/%s: не удалось за %d попытки: %w", service, method, attempts, lastErr)
+	return fmt.Errorf("%s/%s: failed after %d attempts: %w", service, method, attempts, lastErr)
 }
 
 // do возвращает (retryable, error).
@@ -98,13 +98,13 @@ func (c *Client) do(ctx context.Context, service, method string, body []byte, re
 
 	httpResp, err := c.http.Do(httpReq)
 	if err != nil {
-		return true, fmt.Errorf("запрос %s: %w", method, err)
+		return true, fmt.Errorf("request %s: %w", method, err)
 	}
-	defer httpResp.Body.Close()
+	defer func() { _ = httpResp.Body.Close() }()
 
 	raw, err := io.ReadAll(io.LimitReader(httpResp.Body, 8<<20))
 	if err != nil {
-		return true, fmt.Errorf("чтение ответа %s: %w", method, err)
+		return true, fmt.Errorf("read response %s: %w", method, err)
 	}
 
 	if httpResp.StatusCode != http.StatusOK {
@@ -113,7 +113,7 @@ func (c *Client) do(ctx context.Context, service, method string, body []byte, re
 	}
 
 	if err := json.Unmarshal(raw, resp); err != nil {
-		return false, fmt.Errorf("разбор ответа %s: %w", method, err)
+		return false, fmt.Errorf("unmarshal response %s: %w", method, err)
 	}
 	return false, nil
 }
@@ -179,8 +179,11 @@ type Position struct {
 	InstrumentUID  string     `json:"instrumentUid"`
 	Quantity       Quotation  `json:"quantity"`
 	CurrentPrice   MoneyValue `json:"currentPrice"`
-	// ExpectedYield — абсолютная доходность позиции в валюте инструмента.
+	// ExpectedYield — абсолютная доходность позиции за всё время.
 	ExpectedYield Quotation `json:"expectedYield"`
+	// DailyYield — изменение позиции за сегодня. Поле присутствует не во всех
+	// ответах API; если его нет — остаётся нулём.
+	DailyYield MoneyValue `json:"dailyYield"`
 }
 
 // TotalYield — доходность за всё время в деньгах: сумма доходностей позиций.
@@ -193,7 +196,8 @@ type Position struct {
 func (p *Portfolio) TotalYield() (total Dec, skipped []string) {
 	want := p.TotalAmountPortfolio.Currency
 	var sum int64
-	for _, pos := range p.Positions {
+	for i := range p.Positions {
+		pos := &p.Positions[i]
 		if cur := pos.CurrentPrice.Currency; cur != "" && cur != want {
 			skipped = append(skipped, positionLabel(pos))
 			continue
@@ -203,7 +207,7 @@ func (p *Portfolio) TotalYield() (total Dec, skipped []string) {
 	return Dec{nanos: sum}, skipped
 }
 
-func positionLabel(p Position) string {
+func positionLabel(p *Position) string {
 	if p.Ticker != "" {
 		return p.Ticker
 	}

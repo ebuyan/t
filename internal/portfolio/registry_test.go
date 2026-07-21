@@ -1,9 +1,11 @@
-package main
+package portfolio
 
 import (
 	"strings"
 	"testing"
 	"time"
+
+	"tportfolio/internal/tinvest"
 )
 
 const sampleRegistry = `
@@ -19,12 +21,11 @@ const sampleRegistry = `
 `
 
 func entry(date string, stock, gold int64) registryEntry {
-	s := stock + gold
 	return registryEntry{
 		date:   date,
-		income: Dec{nanos: s * nanoScale},
-		stock:  Dec{nanos: stock * nanoScale},
-		gold:   Dec{nanos: gold * nanoScale},
+		income: tinvest.DecUnits(stock + gold),
+		stock:  tinvest.DecUnits(stock),
+		gold:   tinvest.DecUnits(gold),
 	}
 }
 
@@ -72,10 +73,10 @@ func TestUpsertEntryReplacesSameDate(t *testing.T) {
 // income должен сходиться с суммой округлённых слагаемых, иначе в файле
 // появится запись, где income != stock + gold.
 func TestRegistryEntryIncomeMatchesParts(t *testing.T) {
-	s := &snapshot{
-		date:       time.Date(2026, 7, 20, 11, 0, 0, 0, time.UTC),
-		stockYield: Dec{nanos: -1162021 * nanoScale},
-		goldYield:  Dec{nanos: -97248 * nanoScale},
+	s := &Snapshot{
+		Date:       time.Date(2026, 7, 20, 11, 0, 0, 0, time.UTC),
+		StockYield: tinvest.DecUnits(-1162021),
+		GoldYield:  tinvest.DecUnits(-97248),
 	}
 	e := newRegistryEntry(s)
 

@@ -1,4 +1,4 @@
-.PHONY: fmt vet lint check fix test build
+.PHONY: fmt vet lint check fix test build hooks
 
 fmt:
 	go fmt ./...
@@ -18,4 +18,7 @@ fix: fmt
 	golangci-lint run --fix ./...
 
 build:
-	GOOS=linux GOARCH=amd64 go build -o tportfolio .
+	GOOS=linux GOARCH=amd64 go build -o tportfolio ./cmd/tportfolio
+
+hooks:
+	brew install lefthook && lefthook install
