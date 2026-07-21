@@ -3,7 +3,7 @@ package config
 import "github.com/kelseyhightower/envconfig"
 
 type Config struct {
-	Token    string `envconfig:"TINVEST_TOKEN"    required:"true" default:"t.zUGspUsyoO1VxXgwGjx0EDMZyGAsbdPyqbGNhrdUlxNpva85athi7Pbh4L-XNbWHl4gJQuT7w7C5ljz5Nb_04w"`
+	Token    string `envconfig:"TINVEST_TOKEN"    required:"true" default:""`
 	Accounts string `envconfig:"TINVEST_ACCOUNTS"`
 
 	// RegistryFile — реестр доходности в формате inline-полей Dataview.
