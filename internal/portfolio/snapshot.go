@@ -52,7 +52,11 @@ type Snapshot struct {
 	// абсолютное в рублях и относительное в процентах, как показывает приложение.
 	DayChange    tinvest.Dec
 	DayChangePct tinvest.Dec
-	Holdings     []Holding
+	// PortfolioValue — полная стоимость портфеля (totalAmountPortfolio: акции,
+	// золото, облигации и кэш) на сегодня. В базу долей (Total) не входит кэш, а тут
+	// входит всё — это то «всего», что показывает приложение и виджет сводки.
+	PortfolioValue tinvest.Dec
+	Holdings       []Holding
 }
 
 // Meta — тяжёлые справочные данные по инструментам среза: названия и секторы из
@@ -111,6 +115,7 @@ func collectSnapshot(ctx context.Context, c *tinvest.Client, accounts []tinvest.
 		}
 	}
 	s.Total = s.Shares.Add(s.Gold)
+	s.PortfolioValue = portfolioValue
 	// Относительное изменение — к вчерашней стоимости портфеля (сегодня − изменение).
 	s.DayChangePct = s.DayChange.Percent(portfolioValue.Sub(s.DayChange))
 

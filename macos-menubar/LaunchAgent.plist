@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.ebuyan.tportfolio-menubar</string>
+
+    <!-- ЗАМЕНИ путь на реальный (см. README, шаг 2) и подставь свой хост. -->
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/buyan/Applications/tportfolio-menubar</string>
+    </array>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>TPORTFOLIO_URL</key>
+        <string>http://192.168.0.108:8077/api/today</string>
+    </dict>
+
+    <!-- Запускать при логине и держать поднятым. -->
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+</dict>
+</plist>

@@ -9,6 +9,27 @@ import (
 	"tportfolio/internal/portfolio"
 )
 
+func TestAPITodayMethodNotAllowed(t *testing.T) {
+	h := handleAPIToday(Config{Cache: portfolio.NewCache(nil)})
+	rec := httptest.NewRecorder()
+	h(rec, httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/api/today", http.NoBody))
+
+	if rec.Code != http.StatusMethodNotAllowed {
+		t.Errorf("код = %d, хотим %d", rec.Code, http.StatusMethodNotAllowed)
+	}
+}
+
+func TestAPITodayNoData(t *testing.T) {
+	// Кеш пуст — отдаём 503, а не пустой/нулевой JSON.
+	h := handleAPIToday(Config{Cache: portfolio.NewCache(nil)})
+	rec := httptest.NewRecorder()
+	h(rec, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api/today", http.NoBody))
+
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Errorf("код = %d, хотим %d", rec.Code, http.StatusServiceUnavailable)
+	}
+}
+
 func TestSyncRegistryMethodNotAllowed(t *testing.T) {
 	h := handleSyncRegistry(Config{Cache: portfolio.NewCache(nil)})
 	rec := httptest.NewRecorder()

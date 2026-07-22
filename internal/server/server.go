@@ -4,6 +4,7 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -26,6 +27,7 @@ type Config struct {
 func Serve(ctx context.Context, cfg Config) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", handleIndex(cfg))
+	mux.HandleFunc("/api/today", handleAPIToday(cfg))
 	mux.HandleFunc("/sync/registry", handleSyncRegistry(cfg))
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte("ok"))
@@ -81,6 +83,43 @@ func handleIndex(cfg Config) http.HandlerFunc {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		if err := web.Page.Execute(w, view); err != nil {
 			slog.ErrorContext(r.Context(), "render page error", slog.Any("error", err))
+		}
+	}
+}
+
+// todayResponse — сводка «всего за сегодня» для виджета. Числа отдаём как
+// json.Number из Dec.String, без float: деньги нигде не проходят через float.
+// portfolio_value и day_change — в рублях, day_change_pct — в процентах.
+type todayResponse struct {
+	PortfolioValue json.Number `json:"portfolio_value"`
+	DayChange      json.Number `json:"day_change"`
+	DayChangePct   json.Number `json:"day_change_pct"`
+	Updated        string      `json:"updated"`
+}
+
+// handleAPIToday отдаёт JSON-сводку из кеша: полная стоимость портфеля и изменение
+// за сегодня. Без авторизации, как и страница; источник — тот же лёгкий срез.
+func handleAPIToday(cfg Config) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		s, updated, err := cfg.Cache.Snapshot()
+		if err != nil {
+			http.Error(w, "data not ready: "+err.Error(), http.StatusServiceUnavailable)
+			return
+		}
+		resp := todayResponse{
+			PortfolioValue: json.Number(s.PortfolioValue.String(2)),
+			DayChange:      json.Number(s.DayChange.String(2)),
+			DayChangePct:   json.Number(s.DayChangePct.String(2)),
+			Updated:        updated.Format(time.RFC3339),
+		}
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.Header().Set("Cache-Control", "no-store")
+		if err := json.NewEncoder(w).Encode(resp); err != nil {
+			slog.ErrorContext(r.Context(), "render api today error", slog.Any("error", err))
 		}
 	}
 }
