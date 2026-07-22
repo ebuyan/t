@@ -214,12 +214,18 @@ docker run --rm -e TINVEST_TOKEN=… tportfolio
       TINVEST_REGISTRY_SCHEDULE: "Mon,Fri 11:00"
       TINVEST_PORTFOLIO_FILE: "/vault/Финансы/Портфель/Портфель.md"
       TINVEST_PORTFOLIO_SCHEDULE: "10:00"
+      TINVEST_HTTP_ADDR: ":8077"
       TZ: "Europe/Moscow"
     ports:
-      - "8080:8080"   # веб-страница доходности
+      - "8077:8077"   # веб-страница доходности; правая часть = порт из TINVEST_HTTP_ADDR
     volumes:
       - ./data:/vault
 ```
+
+`TINVEST_HTTP_ADDR` (`:8077`) слушает все интерфейсы внутри контейнера; чтобы
+страница открывалась снаружи по `http://192.168.0.108:8077`, порт надо ещё
+опубликовать блоком `ports` — правая часть `8077:8077` должна совпадать с портом из
+`TINVEST_HTTP_ADDR`.
 
 `./data` — тот же каталог, который раздаёт `dufs` на `file.buyan.fun`, то есть волт,
 синкающийся из Obsidian по WebDAV. Пути в переменных указываются **внутренние**
@@ -234,7 +240,7 @@ docker compose up -d --build tportfolio
 docker compose logs -f tportfolio
 ```
 
-Страница доходности после старта — на `http://<хост>:8080`. Записать текущие
+Страница доходности после старта — на `http://192.168.0.108:8077`. Записать текущие
 значения в реестр вне расписания можно кнопкой на ней.
 
 ## TLS и сертификат НУЦ Минцифры
