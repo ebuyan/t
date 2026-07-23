@@ -52,6 +52,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var timer: Timer?
     private let endpoint: URL
 
+    // latest — последний успешный ответ, чтобы перерисовывать при переключении
+    // режима скрытия без нового запроса. hidden — скрыты ли цифры (для шаринга экрана).
+    private var latest: Today?
+    private var hidden = false
+
     override init() {
         let raw = ProcessInfo.processInfo.environment["TPORTFOLIO_URL"] ?? defaultURL
         guard let url = URL(string: raw) else {
@@ -76,6 +81,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func quit() { NSApplication.shared.terminate(nil) }
 
+    @objc private func toggleHidden() {
+        hidden.toggle()
+        renderCurrent()
+    }
+
+    // renderCurrent перерисовывает по текущему состоянию: маскирует при hidden.
+    private func renderCurrent() {
+        if hidden {
+            renderHidden()
+            return
+        }
+        guard let t = latest else { return }
+        render(t)
+    }
+
+    // renderHidden прячет все цифры — и в строке меню, и в выпадашке.
+    private func renderHidden() {
+        statusItem.button?.attributedTitle = NSAttributedString(
+            string: "•••",
+            attributes: [.foregroundColor: NSColor.secondaryLabelColor]
+        )
+        let menu = NSMenu()
+        menu.addItem(NSMenuItem(title: "Содержимое скрыто", action: nil, keyEquivalent: ""))
+        menu.addItem(.separator())
+        menu.addItem(hideToggleItem())
+        menu.addItem(withKey("Обновить сейчас", #selector(refreshNow), "r"))
+        menu.addItem(withKey("Выход", #selector(quit), "q"))
+        statusItem.menu = menu
+    }
+
     // fetch дёргает /api/today и перерисовывает строку меню и выпадашку.
     private func fetch() {
         var req = URLRequest(url: endpoint)
@@ -93,7 +128,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             do {
                 let today = try JSONDecoder().decode(Today.self, from: data)
-                DispatchQueue.main.async { self.render(today) }
+                DispatchQueue.main.async {
+                    self.latest = today
+                    self.renderCurrent()
+                }
             } catch {
                 DispatchQueue.main.async { self.showError("разбор ответа") }
             }
@@ -129,12 +167,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         menu.addItem(.separator())
         menu.addItem(info("Обновлено", shortTime(t.updated)))
+        menu.addItem(hideToggleItem())
         menu.addItem(withKey("Обновить сейчас", #selector(refreshNow), "r"))
         menu.addItem(withKey("Выход", #selector(quit), "q"))
         statusItem.menu = menu
     }
 
+    // hideToggleItem — переключатель скрытия содержимого (для шаринга экрана).
+    private func hideToggleItem() -> NSMenuItem {
+        let title = hidden ? "Показать содержимое" : "Скрыть содержимое"
+        let item = NSMenuItem(title: title, action: #selector(toggleHidden), keyEquivalent: "h")
+        item.state = hidden ? .on : .off
+        return item
+    }
+
     private func showError(_ msg: String) {
+        // В скрытом режиме не раскрываем меню: ошибки не содержат цифр, но пусть
+        // содержимое остаётся замаскированным до явного «Показать».
+        if hidden { return }
         statusItem.button?.attributedTitle = NSAttributedString(
             string: "⚠︎",
             attributes: [.foregroundColor: NSColor.systemOrange]
