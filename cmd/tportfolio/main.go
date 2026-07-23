@@ -53,7 +53,7 @@ func run() error {
 		server.Serve(ctx, server.Config{
 			Addr:         cfg.HTTPAddr,
 			Cache:        cache,
-			SyncRegistry: registrySync(cfg.RegistryFile, cfg.Backup),
+			SyncRegistry: registrySync(cfg.RegistryFile, cfg.PortfolioFile, cfg.Backup),
 		})
 	}()
 
@@ -61,7 +61,7 @@ func run() error {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			startRegistrySchedule(ctx, cache, cfg.RegistrySchedule, cfg.RegistryFile, cfg.Backup)
+			startRegistrySchedule(ctx, cache, cfg.RegistrySchedule, cfg.RegistryFile, cfg.PortfolioFile, cfg.Backup)
 		}()
 	}
 
@@ -79,17 +79,32 @@ func run() error {
 }
 
 // registrySync возвращает функцию записи среза в реестр или nil, если реестр не
-// сконфигурирован (тогда кнопка синхронизации на странице скрыта).
-func registrySync(file string, backup bool) func(context.Context, *portfolio.Snapshot) error {
-	if file == "" {
+// сконфигурирован (тогда кнопка синхронизации на странице скрыта). Если задан файл
+// долей, заодно обновляет бары прогресса в нём.
+func registrySync(registryFile, portfolioFile string, backup bool) func(context.Context, *portfolio.Snapshot) error {
+	if registryFile == "" {
 		return nil
 	}
 	return func(ctx context.Context, s *portfolio.Snapshot) error {
-		return portfolio.UpdateRegistryFile(ctx, file, s, backup)
+		return writeRegistry(ctx, s, registryFile, portfolioFile, backup)
 	}
 }
 
-func startRegistrySchedule(ctx context.Context, c *portfolio.Cache, schCfg, file string, backup bool) {
+// writeRegistry дописывает срез в реестр и, если задан файл долей, пересчитывает в
+// нём бары прогресса. Общая точка для расписания и кнопки на странице.
+func writeRegistry(ctx context.Context, s *portfolio.Snapshot, registryFile, portfolioFile string, backup bool) error {
+	if err := portfolio.UpdateRegistryFile(ctx, registryFile, s, backup); err != nil {
+		return err
+	}
+	if portfolioFile != "" {
+		if err := portfolio.UpdateProgressBarsFile(ctx, portfolioFile, s, backup); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func startRegistrySchedule(ctx context.Context, c *portfolio.Cache, schCfg, registryFile, portfolioFile string, backup bool) {
 	sch, err := portfolio.ParseSchedule(schCfg)
 	if err != nil {
 		slog.ErrorContext(ctx, "invalid registry schedule", slog.Any("error", err))
@@ -100,7 +115,7 @@ func startRegistrySchedule(ctx context.Context, c *portfolio.Cache, schCfg, file
 		if err != nil {
 			return err
 		}
-		return portfolio.UpdateRegistryFile(ctx, file, s, backup)
+		return writeRegistry(ctx, s, registryFile, portfolioFile, backup)
 	})
 }
 
