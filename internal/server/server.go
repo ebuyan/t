@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"tportfolio/internal/portfolio"
+	"tportfolio/internal/tinvest"
 	"tportfolio/web"
 )
 
@@ -87,18 +88,42 @@ func handleIndex(cfg Config) http.HandlerFunc {
 	}
 }
 
-// todayResponse — сводка «всего за сегодня» для виджета. Числа отдаём как
-// json.Number из Dec.String, без float: деньги нигде не проходят через float.
-// portfolio_value и day_change — в рублях, day_change_pct — в процентах.
-type todayResponse struct {
-	PortfolioValue json.Number `json:"portfolio_value"`
-	DayChange      json.Number `json:"day_change"`
-	DayChangePct   json.Number `json:"day_change_pct"`
-	Updated        string      `json:"updated"`
+// num сериализует Dec в JSON-число без float: деньги нигде не проходят через float.
+func num(d tinvest.Dec) json.Number { return json.Number(d.String(2)) }
+
+// assetJSON — класс активов в сводке: стоимость и доход за всё время (в рублях).
+type assetJSON struct {
+	Value json.Number `json:"value"`
+	Yield json.Number `json:"yield"`
 }
 
-// handleAPIToday отдаёт JSON-сводку из кеша: полная стоимость портфеля и изменение
-// за сегодня. Без авторизации, как и страница; источник — тот же лёгкий срез.
+// holdingJSON — одна бумага в составе: тикер, название (если известно), стоимость
+// и изменение за сегодня (в рублях).
+type holdingJSON struct {
+	Ticker    string      `json:"ticker"`
+	Name      string      `json:"name,omitempty"`
+	Value     json.Number `json:"value"`
+	DayChange json.Number `json:"day_change"`
+}
+
+// todayResponse — сводка «всего за сегодня» для виджета. Все суммы в рублях,
+// day_change_pct — в процентах. Проценты долей и доходности виджет считает сам.
+type todayResponse struct {
+	PortfolioValue json.Number   `json:"portfolio_value"` // полная стоимость (с кэшем и облигациями)
+	Total          json.Number   `json:"total"`           // база долей: акции + золото
+	DayChange      json.Number   `json:"day_change"`
+	DayChangePct   json.Number   `json:"day_change_pct"`
+	Income         json.Number   `json:"income"` // доход за всё время (акции + золото)
+	Shares         assetJSON     `json:"shares"`
+	Gold           assetJSON     `json:"gold"`
+	Cash           json.Number   `json:"cash"`
+	Holdings       []holdingJSON `json:"holdings"`
+	Updated        string        `json:"updated"`
+}
+
+// handleAPIToday отдаёт JSON-сводку из кеша: полная стоимость портфеля, изменение
+// за сегодня, доход за всё время, разбивка по классам и состав. Без авторизации,
+// как и страница; источник — тот же лёгкий срез (названия бумаг — из часового кеша).
 func handleAPIToday(cfg Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
@@ -110,12 +135,34 @@ func handleAPIToday(cfg Config) http.HandlerFunc {
 			http.Error(w, "data not ready: "+err.Error(), http.StatusServiceUnavailable)
 			return
 		}
+		// Названия по возможности; их отсутствие не мешает отдать сводку.
+		m, _, _ := cfg.Cache.Meta()
+
 		resp := todayResponse{
-			PortfolioValue: json.Number(s.PortfolioValue.String(2)),
-			DayChange:      json.Number(s.DayChange.String(2)),
-			DayChangePct:   json.Number(s.DayChangePct.String(2)),
+			PortfolioValue: num(s.PortfolioValue),
+			Total:          num(s.Total),
+			DayChange:      num(s.DayChange),
+			DayChangePct:   num(s.DayChangePct),
+			Income:         num(s.StockYield.Add(s.GoldYield)),
+			Shares:         assetJSON{Value: num(s.Shares), Yield: num(s.StockYield)},
+			Gold:           assetJSON{Value: num(s.Gold), Yield: num(s.GoldYield)},
+			Cash:           num(s.Cash),
+			Holdings:       make([]holdingJSON, 0, len(s.Holdings)),
 			Updated:        updated.Format(time.RFC3339),
 		}
+		for _, h := range s.Holdings {
+			name := ""
+			if m != nil {
+				name = m.Names[h.UID]
+			}
+			resp.Holdings = append(resp.Holdings, holdingJSON{
+				Ticker:    h.Ticker,
+				Name:      name,
+				Value:     num(h.Value),
+				DayChange: num(h.DayChange),
+			})
+		}
+
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.Header().Set("Cache-Control", "no-store")
 		if err := json.NewEncoder(w).Encode(resp); err != nil {

@@ -8,18 +8,42 @@ let defaultURL = "http://192.168.0.108:8077/api/today"
 // Как часто опрашивать сервис. Данные на сервере обновляются раз в минуту.
 let refreshInterval: TimeInterval = 60
 
-// today — сводка из /api/today. Числа приходят как JSON-числа (в рублях; pct — %).
+// Модель ответа /api/today. Все суммы в рублях, dayChangePct — в процентах.
+// Проценты долей и доходности считаем на месте (см. render).
+struct Asset: Decodable {
+    let value: Double
+    let yield: Double
+}
+
+struct Holding: Decodable {
+    let ticker: String
+    let name: String?
+    let value: Double
+    let dayChange: Double
+
+    enum CodingKeys: String, CodingKey {
+        case ticker, name, value
+        case dayChange = "day_change"
+    }
+}
+
 struct Today: Decodable {
     let portfolioValue: Double
+    let total: Double
     let dayChange: Double
     let dayChangePct: Double
+    let income: Double
+    let shares: Asset
+    let gold: Asset
+    let cash: Double
+    let holdings: [Holding]
     let updated: String
 
     enum CodingKeys: String, CodingKey {
         case portfolioValue = "portfolio_value"
+        case total, income, shares, gold, cash, holdings, updated
         case dayChange = "day_change"
         case dayChangePct = "day_change_pct"
-        case updated
     }
 }
 
@@ -27,11 +51,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem!
     private var timer: Timer?
     private let endpoint: URL
-
-    // Пункты меню, которые обновляем данными.
-    private let valueItem = NSMenuItem(title: "Стоимость: —", action: nil, keyEquivalent: "")
-    private let changeItem = NSMenuItem(title: "За сегодня: —", action: nil, keyEquivalent: "")
-    private let updatedItem = NSMenuItem(title: "Обновлено: —", action: nil, keyEquivalent: "")
 
     override init() {
         let raw = ProcessInfo.processInfo.environment["TPORTFOLIO_URL"] ?? defaultURL
@@ -45,15 +64,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         statusItem.button?.title = "…"
-
-        let menu = NSMenu()
-        menu.addItem(valueItem)
-        menu.addItem(changeItem)
-        menu.addItem(updatedItem)
-        menu.addItem(.separator())
-        menu.addItem(NSMenuItem(title: "Обновить сейчас", action: #selector(refreshNow), keyEquivalent: "r"))
-        menu.addItem(NSMenuItem(title: "Выход", action: #selector(quit), keyEquivalent: "q"))
-        statusItem.menu = menu
+        statusItem.menu = placeholderMenu("Загрузка…")
 
         fetch()
         timer = Timer.scheduledTimer(withTimeInterval: refreshInterval, repeats: true) { [weak self] _ in
@@ -65,7 +76,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func quit() { NSApplication.shared.terminate(nil) }
 
-    // fetch дёргает /api/today и раскладывает результат по строке меню и пунктам.
+    // fetch дёргает /api/today и перерисовывает строку меню и выпадашку.
     private func fetch() {
         var req = URLRequest(url: endpoint)
         req.timeoutInterval = 10
@@ -89,21 +100,38 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }.resume()
     }
 
-    // render печатает сводку. В строке меню — только изменение за день (цветом),
+    // render печатает сводку. В строке меню — изменение за день (цветом),
     // подробности — в выпадашке.
     private func render(_ t: Today) {
         let up = t.dayChange >= 0
-        let color: NSColor = up ? .systemGreen : .systemRed
         let arrow = up ? "▲" : "▼"
-        let title = "\(arrow) \(signedRub(t.dayChange))"
         statusItem.button?.attributedTitle = NSAttributedString(
-            string: title,
-            attributes: [.foregroundColor: color]
+            string: "\(arrow) \(signedRub(t.dayChange))",
+            attributes: [.foregroundColor: up ? NSColor.systemGreen : NSColor.systemRed]
         )
 
-        valueItem.title = "Стоимость: \(rub(t.portfolioValue))"
-        changeItem.title = "За сегодня: \(signedRub(t.dayChange)) (\(signedPct(t.dayChangePct)))"
-        updatedItem.title = "Обновлено: \(shortTime(t.updated))"
+        let menu = NSMenu()
+        menu.addItem(info("Стоимость портфеля", rub(t.portfolioValue)))
+        menu.addItem(colored("За сегодня", "\(signedRub(t.dayChange)) (\(signedPct(t.dayChangePct)))", t.dayChange))
+        menu.addItem(colored("Доход за всё время", "\(signedRub(t.income)) (\(signedPct(yieldPct(t.total, t.income))))", t.income))
+
+        menu.addItem(.separator())
+        menu.addItem(assetItem("Акции", t.shares, base: t.total))
+        menu.addItem(assetItem("Золото", t.gold, base: t.total))
+        if t.cash != 0 {
+            menu.addItem(info("Кеш", rub(t.cash)))
+        }
+
+        if !t.holdings.isEmpty {
+            menu.addItem(.separator())
+            menu.addItem(holdingsSubmenu(t.holdings))
+        }
+
+        menu.addItem(.separator())
+        menu.addItem(info("Обновлено", shortTime(t.updated)))
+        menu.addItem(withKey("Обновить сейчас", #selector(refreshNow), "r"))
+        menu.addItem(withKey("Выход", #selector(quit), "q"))
+        statusItem.menu = menu
     }
 
     private func showError(_ msg: String) {
@@ -111,7 +139,57 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             string: "⚠︎",
             attributes: [.foregroundColor: NSColor.systemOrange]
         )
-        updatedItem.title = "Ошибка: \(msg)"
+        let menu = placeholderMenu("Ошибка: \(msg)")
+        menu.addItem(withKey("Обновить сейчас", #selector(refreshNow), "r"))
+        menu.addItem(withKey("Выход", #selector(quit), "q"))
+        statusItem.menu = menu
+    }
+
+    // --- Сборка пунктов меню ---
+
+    // assetItem — строка класса активов: стоимость, доля от базы и доходность.
+    private func assetItem(_ name: String, _ a: Asset, base: Double) -> NSMenuItem {
+        let line = "\(rub(a.value)) · \(pct(pctOf(a.value, base))) · \(signedPct(yieldPct(a.value, a.yield)))"
+        return colored(name, line, a.yield)
+    }
+
+    // holdingsSubmenu — подменю «Состав»: бумаги с изменением за сегодня.
+    private func holdingsSubmenu(_ holdings: [Holding]) -> NSMenuItem {
+        let root = NSMenuItem(title: "Состав (\(holdings.count))", action: nil, keyEquivalent: "")
+        let sub = NSMenu()
+        for h in holdings {
+            let label = h.name.map { "\(h.ticker) — \($0)" } ?? h.ticker
+            let line = "\(rub(h.value)) · \(signedRub(h.dayChange))"
+            sub.addItem(colored(label, line, h.dayChange))
+        }
+        root.submenu = sub
+        return root
+    }
+
+    private func placeholderMenu(_ title: String) -> NSMenu {
+        let menu = NSMenu()
+        menu.addItem(NSMenuItem(title: title, action: nil, keyEquivalent: ""))
+        menu.addItem(.separator())
+        return menu
+    }
+
+    // info — «Метка: значение» серой строкой (без действия).
+    private func info(_ label: String, _ value: String) -> NSMenuItem {
+        NSMenuItem(title: "\(label): \(value)", action: nil, keyEquivalent: "")
+    }
+
+    // colored — «Метка: значение», где значение окрашено по знаку sign.
+    private func colored(_ label: String, _ value: String, _ sign: Double) -> NSMenuItem {
+        let item = NSMenuItem(title: "\(label): \(value)", action: nil, keyEquivalent: "")
+        let s = NSMutableAttributedString(string: "\(label): ")
+        let color: NSColor = sign >= 0 ? .systemGreen : .systemRed
+        s.append(NSAttributedString(string: value, attributes: [.foregroundColor: color]))
+        item.attributedTitle = s
+        return item
+    }
+
+    private func withKey(_ title: String, _ action: Selector, _ key: String) -> NSMenuItem {
+        NSMenuItem(title: title, action: action, keyEquivalent: key)
     }
 }
 
@@ -140,14 +218,27 @@ private func rub(_ v: Double) -> String {
 }
 
 private func signedRub(_ v: Double) -> String {
-    let sign = v > 0 ? "+" : ""
-    return sign + rub(v)
+    (v > 0 ? "+" : "") + rub(v)
+}
+
+private func pct(_ v: Double) -> String {
+    (pctFormatter.string(from: NSNumber(value: v)) ?? "\(v)") + "%"
 }
 
 private func signedPct(_ v: Double) -> String {
-    let sign = v > 0 ? "+" : ""
-    let s = pctFormatter.string(from: NSNumber(value: v)) ?? "\(v)"
-    return "\(sign)\(s)%"
+    (v > 0 ? "+" : "") + pct(v)
+}
+
+// pctOf — доля part от base в процентах.
+private func pctOf(_ part: Double, _ base: Double) -> Double {
+    base == 0 ? 0 : part / base * 100
+}
+
+// yieldPct — относительная доходность: доход к вложенному (стоимость − доход),
+// как считает страница и приложение Т-Банка.
+private func yieldPct(_ value: Double, _ yield: Double) -> Double {
+    let invested = value - yield
+    return invested == 0 ? 0 : yield / invested * 100
 }
 
 // shortTime вытаскивает ЧЧ:ММ из RFC3339-метки обновления.
