@@ -162,6 +162,15 @@ func handleAPIToday(cfg Config) http.HandlerFunc {
 				DayChange: num(h.DayChange),
 			})
 		}
+		// Золото — отдельной строкой состава, как в таблице на странице.
+		if !s.Gold.IsZero() {
+			resp.Holdings = append(resp.Holdings, holdingJSON{
+				Ticker:    "GLDRUB_TOM",
+				Name:      "Золото",
+				Value:     num(s.Gold),
+				DayChange: num(s.GoldDayChange),
+			})
+		}
 
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.Header().Set("Cache-Control", "no-store")

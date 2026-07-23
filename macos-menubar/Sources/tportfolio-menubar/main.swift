@@ -149,17 +149,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     // assetItem — строка класса активов: стоимость, доля от базы и доходность.
     private func assetItem(_ name: String, _ a: Asset, base: Double) -> NSMenuItem {
-        let line = "\(rub(a.value)) · \(pct(pctOf(a.value, base))) · \(signedPct(yieldPct(a.value, a.yield)))"
+        let line = "\(rub(a.value))   \(pct(pctOf(a.value, base)))   \(signedPct(yieldPct(a.value, a.yield)))"
         return colored(name, line, a.yield)
     }
 
-    // holdingsSubmenu — подменю «Состав»: бумаги с изменением за сегодня.
+    // holdingsSubmenu — подменю «Состав»: бумаги с изменением за сегодня,
+    // по убыванию изменения (сверху — сильнее всего выросшие за день).
     private func holdingsSubmenu(_ holdings: [Holding]) -> NSMenuItem {
         let root = NSMenuItem(title: "Состав (\(holdings.count))", action: nil, keyEquivalent: "")
         let sub = NSMenu()
-        for h in holdings {
+        for h in holdings.sorted(by: { $0.dayChange > $1.dayChange }) {
             let label = h.name.map { "\(h.ticker) — \($0)" } ?? h.ticker
-            let line = "\(rub(h.value)) · \(signedRub(h.dayChange))"
+            let line = "\(rub(h.value))   \(signedRub(h.dayChange))"
             sub.addItem(colored(label, line, h.dayChange))
         }
         root.submenu = sub
