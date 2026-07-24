@@ -22,6 +22,9 @@ type Config struct {
 	// SyncRegistry записывает текущий срез в реестр доходности. nil — кнопка
 	// синхронизации на странице недоступна (реестр не сконфигурирован).
 	SyncRegistry func(context.Context, *portfolio.Snapshot) error
+	// SyncPortfolio фиксирует текущий срез долей в Портфель.md. nil — кнопка
+	// фиксации на странице недоступна (файл долей не сконфигурирован).
+	SyncPortfolio func(context.Context, *portfolio.Snapshot, *portfolio.Meta) error
 }
 
 // Serve поднимает сервер на cfg.Addr и работает, пока жив ctx.
@@ -30,6 +33,7 @@ func Serve(ctx context.Context, cfg Config) {
 	mux.HandleFunc("/", handleIndex(cfg))
 	mux.HandleFunc("/api/today", handleAPIToday(cfg))
 	mux.HandleFunc("/sync/registry", handleSyncRegistry(cfg))
+	mux.HandleFunc("/sync/portfolio", handleSyncPortfolio(cfg))
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte("ok"))
 	})
@@ -80,6 +84,7 @@ func handleIndex(cfg Config) http.HandlerFunc {
 
 		view := portfolio.BuildYieldView(s, m, updated)
 		view.CanSync = cfg.SyncRegistry != nil
+		view.CanSyncPortfolio = cfg.SyncPortfolio != nil
 
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		if err := web.Page.Execute(w, view); err != nil {
@@ -202,5 +207,36 @@ func handleSyncRegistry(cfg Config) http.HandlerFunc {
 			return
 		}
 		_, _ = w.Write([]byte("written to registry for " + s.Date.Format("2006-01-02")))
+	}
+}
+
+// handleSyncPortfolio по кнопке на странице фиксирует текущий срез долей в
+// Портфель.md. Нужен и лёгкий срез, и метаданные (названия/секторы).
+func handleSyncPortfolio(cfg Config) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		if cfg.SyncPortfolio == nil {
+			http.Error(w, "portfolio file is not configured (TINVEST_PORTFOLIO_FILE)", http.StatusBadRequest)
+			return
+		}
+		s, _, err := cfg.Cache.Snapshot()
+		if err != nil {
+			http.Error(w, "data not ready: "+err.Error(), http.StatusServiceUnavailable)
+			return
+		}
+		m, _, err := cfg.Cache.Meta()
+		if err != nil {
+			http.Error(w, "meta not ready: "+err.Error(), http.StatusServiceUnavailable)
+			return
+		}
+		if err := cfg.SyncPortfolio(r.Context(), s, m); err != nil {
+			slog.ErrorContext(r.Context(), "portfolio sync error", slog.Any("error", err))
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		_, _ = w.Write([]byte("portfolio slice written for " + s.ColumnDate()))
 	}
 }

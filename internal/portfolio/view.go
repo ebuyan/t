@@ -24,6 +24,9 @@ type YieldView struct {
 	// CanSync — показывать ли кнопку записи текущих значений в реестр. Ставится
 	// сервером: доступно, только если реестр сконфигурирован.
 	CanSync bool
+	// CanSyncPortfolio — показывать ли кнопку фиксации долей в Портфель.md.
+	// Ставится сервером: доступно, только если файл долей сконфигурирован.
+	CanSyncPortfolio bool
 }
 
 type AssetView struct {
@@ -70,14 +73,15 @@ func BuildYieldView(s *Snapshot, m *Meta, updated time.Time) YieldView {
 	return v
 }
 
-// holdingRow — строка состава: стоимость для сортировки и уже готовое представление.
+// holdingRow — строка состава: изменение за сегодня для сортировки и уже готовое
+// представление.
 type holdingRow struct {
-	value tinvest.Dec
-	view  HoldingView
+	dayChange tinvest.Dec
+	view      HoldingView
 }
 
 // buildHoldings собирает таблицу состава: бумаги, золото и кеш одной таблицей,
-// отсортированные по стоимости.
+// отсортированные по убыванию изменения за сегодня.
 func buildHoldings(s *Snapshot, m *Meta) []HoldingView {
 	rows := make([]holdingRow, 0, len(s.Holdings)+2)
 	base := s.ShareBase() // доли строк — от акции + золото + кеш
@@ -87,7 +91,7 @@ func buildHoldings(s *Snapshot, m *Meta) []HoldingView {
 		if m != nil {
 			name = m.Names[h.UID]
 		}
-		rows = append(rows, holdingRow{h.Value, HoldingView{
+		rows = append(rows, holdingRow{h.DayChange, HoldingView{
 			Ticker:         h.Ticker,
 			Name:           name,
 			Price:          price(h.Price),
@@ -101,7 +105,7 @@ func buildHoldings(s *Snapshot, m *Meta) []HoldingView {
 	}
 
 	if !s.Gold.IsZero() {
-		rows = append(rows, holdingRow{s.Gold, HoldingView{
+		rows = append(rows, holdingRow{s.GoldDayChange, HoldingView{
 			Ticker:         "GLDRUB_TOM",
 			Name:           "Золото",
 			Price:          dash,
@@ -117,7 +121,8 @@ func buildHoldings(s *Snapshot, m *Meta) []HoldingView {
 	if !s.Cash.IsZero() {
 		// Кеш: доля от той же базы (входит в 100%); доходности нет — по сумме
 		// видно приход дивидендов.
-		rows = append(rows, holdingRow{s.Cash, HoldingView{
+		// У кеша нет изменения за сегодня — в сортировке он идёт как нулевой.
+		rows = append(rows, holdingRow{tinvest.Dec{}, HoldingView{
 			Ticker:    "RUB",
 			Name:      "Кеш",
 			Price:     dash,
@@ -129,7 +134,7 @@ func buildHoldings(s *Snapshot, m *Meta) []HoldingView {
 	}
 
 	sort.Slice(rows, func(i, j int) bool {
-		return rows[i].value.Cmp(rows[j].value) > 0
+		return rows[i].dayChange.Cmp(rows[j].dayChange) > 0
 	})
 
 	views := make([]HoldingView, 0, len(rows))

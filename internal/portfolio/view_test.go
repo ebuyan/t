@@ -70,13 +70,23 @@ func TestBuildYieldView(t *testing.T) {
 	if v.Shares.Share != "66,33%" {
 		t.Errorf("Shares.Share = %q, ожидалось %q", v.Shares.Share, "66,33%")
 	}
-	// Состав: SBER (600 000), золото (500 000), кеш (7 500) — по убыванию стоимости.
+	// Состав по убыванию изменения за сегодня: золото (+3 000), кеш (0),
+	// SBER (−2 000).
 	if len(v.Holdings) != 3 {
 		t.Fatalf("Holdings: %d строк, ожидалось 3 (акция + золото + кеш): %+v", len(v.Holdings), v.Holdings)
 	}
-	sber := v.Holdings[0]
+	gold := v.Holdings[0]
+	if gold.Name != "Золото" || gold.Value != "500 000 ₽" || gold.Yield != "-50 000 ₽" {
+		t.Errorf("строка золота = %+v", gold)
+	}
+	cash := v.Holdings[1]
+	// Кеш теперь с долей от той же базы: 7 500/1 507 500 = 0,50%.
+	if cash.Name != "Кеш" || cash.Value != "7 500 ₽" || cash.Share != "0,50%" || cash.Yield != "—" {
+		t.Errorf("строка кеша = %+v", cash)
+	}
+	sber := v.Holdings[2]
 	if sber.Ticker != "SBER" || sber.Value != "600 000 ₽" || sber.Name != "Сбер Банк" {
-		t.Errorf("первая строка = %+v", sber)
+		t.Errorf("строка SBER = %+v", sber)
 	}
 	if sber.Price != "258,00 ₽" {
 		t.Errorf("SBER цена = %q, ожидалось %q", sber.Price, "258,00 ₽")
@@ -86,15 +96,6 @@ func TestBuildYieldView(t *testing.T) {
 	}
 	if sber.DayChange != "-2 000 ₽" || sber.DayChangeClass != "neg" {
 		t.Errorf("SBER за сегодня = %q (class=%q)", sber.DayChange, sber.DayChangeClass)
-	}
-	gold := v.Holdings[1]
-	if gold.Name != "Золото" || gold.Value != "500 000 ₽" || gold.Yield != "-50 000 ₽" {
-		t.Errorf("строка золота = %+v", gold)
-	}
-	cash := v.Holdings[2]
-	// Кеш теперь с долей от той же базы: 7 500/1 507 500 = 0,50%.
-	if cash.Name != "Кеш" || cash.Value != "7 500 ₽" || cash.Share != "0,50%" || cash.Yield != "—" {
-		t.Errorf("строка кеша = %+v", cash)
 	}
 }
 

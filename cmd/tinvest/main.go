@@ -51,9 +51,10 @@ func run() error {
 	go func() {
 		defer wg.Done()
 		server.Serve(ctx, server.Config{
-			Addr:         cfg.HTTPAddr,
-			Cache:        cache,
-			SyncRegistry: registrySync(cfg.RegistryFile, cfg.PortfolioFile),
+			Addr:          cfg.HTTPAddr,
+			Cache:         cache,
+			SyncRegistry:  registrySync(cfg.RegistryFile, cfg.PortfolioFile),
+			SyncPortfolio: portfolioSync(cfg.PortfolioFile),
 		})
 	}()
 
@@ -87,6 +88,17 @@ func registrySync(registryFile, portfolioFile string) func(context.Context, *por
 	}
 	return func(ctx context.Context, s *portfolio.Snapshot) error {
 		return writeRegistry(ctx, s, registryFile, portfolioFile)
+	}
+}
+
+// portfolioSync возвращает функцию фиксации среза долей в Портфель.md или nil,
+// если файл долей не сконфигурирован (тогда кнопка фиксации на странице скрыта).
+func portfolioSync(portfolioFile string) func(context.Context, *portfolio.Snapshot, *portfolio.Meta) error {
+	if portfolioFile == "" {
+		return nil
+	}
+	return func(ctx context.Context, s *portfolio.Snapshot, m *portfolio.Meta) error {
+		return portfolio.UpdatePortfolioFile(ctx, portfolioFile, s, m)
 	}
 }
 

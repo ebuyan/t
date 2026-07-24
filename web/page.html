@@ -78,9 +78,10 @@
     {{template "asset" .Gold}}
   </div>
 
-  {{if .CanSync}}
+  {{if or .CanSync .CanSyncPortfolio}}
   <div class="actions">
-    <button id="sync" type="button">Записать в реестр</button>
+    {{if .CanSync}}<button id="sync" type="button">Записать в реестр</button>{{end}}
+    {{if .CanSyncPortfolio}}<button id="sync-portfolio" type="button">Зафиксировать доли</button>{{end}}
     <span id="sync-status"></span>
   </div>
   {{end}}
@@ -106,17 +107,23 @@
   </table>
   </div>
 </div>
-{{if .CanSync}}
+{{if or .CanSync .CanSyncPortfolio}}
 <script>
-  document.getElementById('sync').addEventListener('click', function () {
-    var btn = this, status = document.getElementById('sync-status');
-    btn.disabled = true;
-    status.textContent = 'Синхронизация…';
-    fetch('/sync/registry', { method: 'POST' })
-      .then(function (r) { return r.text().then(function (t) { return { ok: r.ok, text: t }; }); })
-      .then(function (res) { status.textContent = res.text; btn.disabled = false; })
-      .catch(function (e) { status.textContent = 'Ошибка: ' + e; btn.disabled = false; });
-  });
+  function wireSync(btnId, url, pending) {
+    var btn = document.getElementById(btnId);
+    if (!btn) return;
+    btn.addEventListener('click', function () {
+      var status = document.getElementById('sync-status');
+      btn.disabled = true;
+      status.textContent = pending;
+      fetch(url, { method: 'POST' })
+        .then(function (r) { return r.text().then(function (t) { return { ok: r.ok, text: t }; }); })
+        .then(function (res) { status.textContent = res.text; btn.disabled = false; })
+        .catch(function (e) { status.textContent = 'Ошибка: ' + e; btn.disabled = false; });
+    });
+  }
+  wireSync('sync', '/sync/registry', 'Синхронизация…');
+  wireSync('sync-portfolio', '/sync/portfolio', 'Фиксация долей…');
 </script>
 {{end}}
 </body>
