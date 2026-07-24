@@ -177,9 +177,8 @@ func collectMeta(ctx context.Context, c *tinvest.Client, holdings []Holding) (*M
 // (API отдаёт его в inst.Name) — в подписях он лишний, тикер и так это показывает.
 func trimShareSuffix(name string) string {
 	trimmed := strings.TrimSpace(name)
-	if cut, ok := strings.CutSuffix(trimmed, "- акции привилегированные"); ok {
-		return strings.TrimSpace(cut)
-	}
+	trimmed, _ = strings.CutSuffix(trimmed, " - акции привилегированные")
+	trimmed, _ = strings.CutSuffix(trimmed, " - привилегированные акции")
 	return trimmed
 }
 
