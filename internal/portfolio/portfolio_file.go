@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
-	"time"
 
 	"tportfolio/internal/tinvest"
 )
@@ -42,9 +41,9 @@ var sectorNames = map[string]string{
 
 // UpdatePortfolioFile дописывает в файл столбец с текущим срезом. Требуются и
 // срез, и метаданные (названия/секторы/дивиденды). Файл живёт в синкающемся
-// волте, поэтому: сначала бэкап, потом запись во временный файл рядом и атомарный
-// rename — оборванная запись не оставит половину таблицы.
-func UpdatePortfolioFile(ctx context.Context, path string, s *Snapshot, m *Meta, backup bool) error {
+// волте, поэтому запись идёт во временный файл рядом и атомарный rename —
+// оборванная запись не оставит половину таблицы.
+func UpdatePortfolioFile(ctx context.Context, path string, s *Snapshot, m *Meta) error {
 	//nolint:gosec // путь берётся из доверенного env-конфига, не из пользовательского ввода
 	content, err := os.ReadFile(path)
 	if err != nil {
@@ -58,14 +57,6 @@ func UpdatePortfolioFile(ctx context.Context, path string, s *Snapshot, m *Meta,
 	if updated == string(content) {
 		slog.InfoContext(ctx, "portfolio file already has this column, no changes")
 		return nil
-	}
-
-	bak, err := writeBackup(path, content, backup)
-	if err != nil {
-		return err
-	}
-	if bak != "" {
-		slog.InfoContext(ctx, "backup written", slog.String("path", bak))
 	}
 
 	return writeAtomic(path, []byte(updated))
@@ -221,20 +212,6 @@ func tickerOf(label string) string {
 		return strings.TrimSpace(label[:i])
 	}
 	return strings.TrimSpace(label)
-}
-
-// writeBackup кладёт копию рядом с файлом: <имя>.bak-<дата>.
-// При backup == false ничего не делает и возвращает пустой путь.
-func writeBackup(path string, content []byte, backup bool) (string, error) {
-	if !backup {
-		return "", nil
-	}
-	name := fmt.Sprintf("%s.bak-%s", path, time.Now().Format("2006-01-02T15-04-05"))
-	//nolint:gosec // 0644 намеренно: файлы живут в синкающемся волте и читаются другими инструментами
-	if err := os.WriteFile(name, content, 0o644); err != nil {
-		return "", fmt.Errorf("backup %s: %w", name, err)
-	}
-	return name, nil
 }
 
 // writeAtomic пишет во временный файл в том же каталоге и переименовывает поверх.

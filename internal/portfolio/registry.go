@@ -44,8 +44,8 @@ func (e registryEntry) render() []string {
 }
 
 // UpdateRegistryFile добавляет запись в начало реестра. Как и файл долей,
-// пишется через бэкап и атомарную замену — файл живёт в синкающемся волте.
-func UpdateRegistryFile(ctx context.Context, path string, s *Snapshot, backup bool) error {
+// пишется через атомарную замену — файл живёт в синкающемся волте.
+func UpdateRegistryFile(ctx context.Context, path string, s *Snapshot) error {
 	//nolint:gosec // путь берётся из доверенного env-конфига, не из пользовательского ввода
 	content, err := os.ReadFile(path)
 	if err != nil {
@@ -57,14 +57,6 @@ func UpdateRegistryFile(ctx context.Context, path string, s *Snapshot, backup bo
 	if updated == string(content) {
 		slog.InfoContext(ctx, "registry entry already up to date", slog.String("date", entry.date))
 		return nil
-	}
-
-	bak, err := writeBackup(path, content, backup)
-	if err != nil {
-		return err
-	}
-	if bak != "" {
-		slog.InfoContext(ctx, "backup written", slog.String("path", bak))
 	}
 
 	slog.InfoContext(ctx, "registry updated",

@@ -43,8 +43,8 @@ func barSource(name string, s *Snapshot) (tinvest.Dec, bool) {
 }
 
 // UpdateProgressBarsFile пересчитывает value в барах прогресса и переписывает файл.
-// Как и таблицы долей, пишется через бэкап и атомарную замену.
-func UpdateProgressBarsFile(ctx context.Context, path string, s *Snapshot, backup bool) error {
+// Как и таблицы долей, пишется через атомарную замену.
+func UpdateProgressBarsFile(ctx context.Context, path string, s *Snapshot) error {
 	//nolint:gosec // путь берётся из доверенного env-конфига, не из пользовательского ввода
 	content, err := os.ReadFile(path)
 	if err != nil {
@@ -55,14 +55,6 @@ func UpdateProgressBarsFile(ctx context.Context, path string, s *Snapshot, backu
 	if updated == string(content) {
 		slog.InfoContext(ctx, "progress bars already up to date")
 		return nil
-	}
-
-	bak, err := writeBackup(path, content, backup)
-	if err != nil {
-		return err
-	}
-	if bak != "" {
-		slog.InfoContext(ctx, "backup written", slog.String("path", bak))
 	}
 
 	slog.InfoContext(ctx, "progress bars updated", slog.Int("bars", n))

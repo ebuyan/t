@@ -20,11 +20,6 @@ type Config struct {
 	PortfolioSchedule string `envconfig:"TINVEST_PORTFOLIO_SCHEDULE"`
 
 	HTTPAddr string `envconfig:"TINVEST_HTTP_ADDR" required:"true" default:":8080"`
-
-	// Backup — класть копию файла рядом перед каждой записью. Обсидиан такие
-	// файлы не показывает (расширение не .md), но они синкаются и копятся,
-	// поэтому после обкатки достаточно выставить false.
-	Backup bool `envconfig:"TINVEST_BACKUP" default:"true"`
 }
 
 func LoadConfig() (Config, error) {
