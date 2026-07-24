@@ -9,7 +9,7 @@ import (
 	"sort"
 	"strings"
 
-	"tportfolio/internal/tinvest"
+	"tinvest/internal/tinvest"
 )
 
 // Заголовки первых столбцов, по которым опознаём таблицы в файле.
@@ -218,7 +218,7 @@ func tickerOf(label string) string {
 // Тот же каталог обязателен: rename атомарен только в пределах файловой системы.
 func writeAtomic(path string, content []byte) error {
 	dir := filepath.Dir(path)
-	f, err := os.CreateTemp(dir, ".tportfolio-*.tmp")
+	f, err := os.CreateTemp(dir, ".tinvest-*.tmp")
 	if err != nil {
 		return fmt.Errorf("temp file in %s: %w", dir, err)
 	}

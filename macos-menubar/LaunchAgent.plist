@@ -3,17 +3,17 @@
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>com.ebuyan.tportfolio-menubar</string>
+    <string>com.ebuyan.tinvest-menubar</string>
 
     <!-- ЗАМЕНИ путь на реальный (см. README, шаг 2) и подставь свой хост. -->
     <key>ProgramArguments</key>
     <array>
-        <string>/Users/buyan/Applications/tportfolio-menubar</string>
+        <string>/Users/buyan/Applications/tinvest-menubar</string>
     </array>
 
     <key>EnvironmentVariables</key>
     <dict>
-        <key>TPORTFOLIO_URL</key>
+        <key>TINVEST_URL</key>
         <string>http://192.168.0.108:8077/api/today</string>
     </dict>
 

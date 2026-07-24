@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"tportfolio/internal/tinvest"
+	"tinvest/internal/tinvest"
 )
 
 const sampleRegistry = `

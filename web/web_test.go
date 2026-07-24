@@ -5,9 +5,9 @@ import (
 	"testing"
 	"time"
 
-	"tportfolio/internal/portfolio"
-	"tportfolio/internal/tinvest"
-	"tportfolio/web"
+	"tinvest/internal/portfolio"
+	"tinvest/internal/tinvest"
+	"tinvest/web"
 )
 
 func TestPageRenders(t *testing.T) {

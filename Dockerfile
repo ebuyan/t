@@ -5,13 +5,13 @@ COPY go.mod go.sum ./
 RUN go mod download
 
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux go build -o tportfolio ./cmd/tportfolio
+RUN CGO_ENABLED=0 GOOS=linux go build -o tinvest ./cmd/tinvest
 
 FROM alpine:3.21
 
 # ca-certificates — для HTTPS-запросов к invest-public-api.tbank.ru
 RUN apk add --no-cache ca-certificates
 
-COPY --from=builder /app/tportfolio /tportfolio
+COPY --from=builder /app/tinvest /tinvest
 
-ENTRYPOINT ["/tportfolio"]
+ENTRYPOINT ["/tinvest"]

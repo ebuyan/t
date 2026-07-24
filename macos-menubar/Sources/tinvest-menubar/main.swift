@@ -1,7 +1,7 @@
 import AppKit
 
-// Меню-бар со сводкой «всего за сегодня» из tportfolio.
-// Адрес сервиса берётся из переменной окружения TPORTFOLIO_URL, иначе — из
+// Меню-бар со сводкой «всего за сегодня» из tinvest.
+// Адрес сервиса берётся из переменной окружения TINVEST_URL, иначе — из
 // значения по умолчанию ниже. Замени IP на свой хост со стеком ha.
 let defaultURL = "http://192.168.0.108:8077/api/today"
 
@@ -58,9 +58,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var hidden = false
 
     override init() {
-        let raw = ProcessInfo.processInfo.environment["TPORTFOLIO_URL"] ?? defaultURL
+        let raw = ProcessInfo.processInfo.environment["TINVEST_URL"] ?? defaultURL
         guard let url = URL(string: raw) else {
-            fatalError("invalid TPORTFOLIO_URL: \(raw)")
+            fatalError("invalid TINVEST_URL: \(raw)")
         }
         endpoint = url
         super.init()

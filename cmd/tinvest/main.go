@@ -11,10 +11,10 @@ import (
 	"time"
 	_ "time/tzdata"
 
-	"tportfolio/internal/config"
-	"tportfolio/internal/portfolio"
-	"tportfolio/internal/server"
-	"tportfolio/internal/tinvest"
+	"tinvest/internal/config"
+	"tinvest/internal/portfolio"
+	"tinvest/internal/server"
+	"tinvest/internal/tinvest"
 )
 
 func main() {
@@ -37,7 +37,7 @@ func run() error {
 	}
 
 	client := tinvest.NewClient(ctx, cfg.Token)
-	cache := portfolio.NewCache(portfolio.NewCollector(client, cfg.Accounts))
+	cache := portfolio.NewCache(portfolio.NewCollector(client))
 
 	var wg sync.WaitGroup
 

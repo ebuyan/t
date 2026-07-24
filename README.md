@@ -1,4 +1,4 @@
-# tportfolio
+# tinvest
 
 Выгрузка портфеля из T-Invest API в файлы Obsidian. Один бинарник без внешних
 зависимостей, две независимые задачи по своим расписаниям:
@@ -156,7 +156,6 @@ width: 100%
 | `TINVEST_REGISTRY_SCHEDULE` |  | Когда обновлять реестр: `Mon,Fri 11:00` или `11:00` для ежедневного |
 | `TINVEST_PORTFOLIO_FILE` |  | Файл с таблицами долей (`Портфель.md`) |
 | `TINVEST_PORTFOLIO_SCHEDULE` |  | Время `HH:MM` обновления долей первого числа квартала |
-| `TINVEST_ACCOUNTS` |  | Id счетов через запятую (по умолчанию — все брокерские и ИИС) |
 | `TINVEST_HTTP_ADDR` |  | Адрес веб-страницы доходности, по умолчанию `:8080` |
 | `TZ` |  | Часовой пояс для расписания, напр. `Europe/Moscow` |
 
@@ -181,7 +180,7 @@ width: 100%
 ## Структура
 
 ```
-cmd/tportfolio      — точка входа: конфиг, кеш, обвязка serve, задачи по расписанию
+cmd/tinvest      — точка входа: конфиг, кеш, обвязка serve, задачи по расписанию
 internal/tinvest    — клиент T-Invest API, модели и денежный тип Dec
 internal/portfolio  — домен: сбор среза и метаданных, кеш, запись md-файлов, веб-модель
 internal/server     — HTTP-сервер: страница доходности, синхронизация в реестр, healthz
@@ -191,7 +190,7 @@ web                 — статика: HTML-шаблоны страницы, в
 ## Сборка и запуск
 
 ```sh
-go build -o tportfolio ./cmd/tportfolio
+go build -o tinvest ./cmd/tinvest
 # кросс-компиляция под сервер (Linux x86-64):
 make build
 ```
@@ -200,18 +199,18 @@ make build
 export TINVEST_TOKEN=…
 
 # только веб-страница на :8080 (без записи файлов)
-./tportfolio
+./tinvest
 
 # со всеми задачами по расписанию и своим адресом
 TINVEST_HTTP_ADDR=":9000" \
 TINVEST_REGISTRY_FILE="/mnt/vault/Финансы/Портфель/Реестр.md" \
 TINVEST_REGISTRY_SCHEDULE="Mon,Fri 11:00" \
-TINVEST_ACCOUNTS=2000000000,2000000001 ./tportfolio
+./tinvest
 ```
 
-Id счетов видно в приложении Т-Инвестиций; по умолчанию берутся все брокерские и
-ИИС. Перед первым запуском на живом файле стоит прогнать на копии и посмотреть diff
-(либо нажать кнопку записи в реестр на странице и проверить результат).
+Берутся все брокерские счета и ИИС. Перед первым запуском на живом файле стоит
+прогнать на копии и посмотреть diff (либо нажать кнопку записи в реестр на странице
+и проверить результат).
 
 ## Разработка
 
@@ -227,8 +226,8 @@ make hooks   # brew install lefthook && lefthook install — pre-commit гоня
 ## Docker
 
 ```sh
-docker build -t tportfolio .
-docker run --rm -e TINVEST_TOKEN=… tportfolio
+docker build -t tinvest .
+docker run --rm -e TINVEST_TOKEN=… tinvest
 ```
 
 ### В стеке ha (192.168.0.108)
@@ -236,9 +235,9 @@ docker run --rm -e TINVEST_TOKEN=… tportfolio
 Блок для `~/ha/docker-compose.yaml` — в стиле сервиса `energo`:
 
 ```yaml
-  tportfolio:
+  tinvest:
     build: https://github.com/ebuyan/t.git#main
-    container_name: tportfolio
+    container_name: tinvest
     restart: unless-stopped
     environment:
       TINVEST_TOKEN: "…"
@@ -268,8 +267,8 @@ docker run --rm -e TINVEST_TOKEN=… tportfolio
 на три часа раньше.
 
 ```sh
-docker compose up -d --build tportfolio
-docker compose logs -f tportfolio
+docker compose up -d --build tinvest
+docker compose logs -f tinvest
 ```
 
 Страница доходности после старта — на `http://192.168.0.108:8077`. Записать текущие

@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"tportfolio/internal/tinvest"
+	"tinvest/internal/tinvest"
 )
 
 // testDoc — документ с автоматическим баром day-year и четырьмя manual-барами в

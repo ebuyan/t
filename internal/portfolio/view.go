@@ -4,7 +4,7 @@ import (
 	"sort"
 	"time"
 
-	"tportfolio/internal/tinvest"
+	"tinvest/internal/tinvest"
 )
 
 // YieldView — модель веб-страницы доходности: всё уже отформатировано в строки,

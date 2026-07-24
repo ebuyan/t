@@ -3,7 +3,7 @@ package portfolio
 import (
 	"strings"
 
-	"tportfolio/internal/tinvest"
+	"tinvest/internal/tinvest"
 )
 
 // Форматирование значений в строки в том виде, в каком они лежат в файлах и на

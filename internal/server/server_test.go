@@ -6,7 +6,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"tportfolio/internal/portfolio"
+	"tinvest/internal/portfolio"
 )
 
 func TestAPITodayMethodNotAllowed(t *testing.T) {

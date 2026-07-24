@@ -10,9 +10,9 @@ import (
 	"net/http"
 	"time"
 
-	"tportfolio/internal/portfolio"
-	"tportfolio/internal/tinvest"
-	"tportfolio/web"
+	"tinvest/internal/portfolio"
+	"tinvest/internal/tinvest"
+	"tinvest/web"
 )
 
 // Config — зависимости веб-сервера.

@@ -1,4 +1,4 @@
-module tportfolio
+module tinvest
 
 go 1.26
 

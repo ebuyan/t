@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"tportfolio/internal/tinvest"
+	"tinvest/internal/tinvest"
 )
 
 // TTL кешей. Лёгкий срез (GetPortfolio) обновляем часто — он и на странице, и в
@@ -18,14 +18,13 @@ const (
 	metaTTL     = time.Hour
 )
 
-// Collector ходит в T-Invest API за срезом и метаданными по выбранным счетам.
+// Collector ходит в T-Invest API за срезом и метаданными по инвестиционным счетам.
 type Collector struct {
-	client   *tinvest.Client
-	accounts string // сырой список id из TINVEST_ACCOUNTS
+	client *tinvest.Client
 }
 
-func NewCollector(client *tinvest.Client, accounts string) *Collector {
-	return &Collector{client: client, accounts: accounts}
+func NewCollector(client *tinvest.Client) *Collector {
+	return &Collector{client: client}
 }
 
 // Snapshot собирает лёгкий срез: GetAccounts + GetPortfolio по счетам.
@@ -37,7 +36,7 @@ func (c *Collector) Snapshot(ctx context.Context) (*Snapshot, error) {
 	if err != nil {
 		return nil, err
 	}
-	targets := selectAccounts(all, c.accounts)
+	targets := selectAccounts(all)
 	if len(targets) == 0 {
 		return nil, fmt.Errorf("no matching accounts found (available: %d)", len(all))
 	}

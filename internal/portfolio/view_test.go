@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"tportfolio/internal/tinvest"
+	"tinvest/internal/tinvest"
 )
 
 func TestBuildYieldView(t *testing.T) {

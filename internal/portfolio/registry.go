@@ -7,7 +7,7 @@ import (
 	"os"
 	"strings"
 
-	"tportfolio/internal/tinvest"
+	"tinvest/internal/tinvest"
 )
 
 // roundStep — до какого шага округляется доходность в реестре.

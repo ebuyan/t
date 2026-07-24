@@ -18,7 +18,7 @@ fix: fmt
 	golangci-lint run --fix ./...
 
 build:
-	GOOS=linux GOARCH=amd64 go build -o tportfolio ./cmd/tportfolio
+	GOOS=linux GOARCH=amd64 go build -o tinvest ./cmd/tinvest
 
 hooks:
 	brew install lefthook && lefthook install

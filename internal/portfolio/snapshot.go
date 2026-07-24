@@ -4,10 +4,9 @@ import (
 	"context"
 	"log/slog"
 	"sort"
-	"strings"
 	"time"
 
-	"tportfolio/internal/tinvest"
+	"tinvest/internal/tinvest"
 )
 
 // goldTickers — инструменты, которые считаем золотом. API отдаёт GLDRUB_TOM как
@@ -167,24 +166,8 @@ func (s *Snapshot) ColumnDate() string {
 	return s.Date.Format("2006.01.02")
 }
 
-// selectAccounts отбирает счета по явному списку id, иначе — все инвестиционные.
-func selectAccounts(all []tinvest.Account, ids string) []tinvest.Account {
-	if strings.TrimSpace(ids) != "" {
-		want := make(map[string]bool)
-		for _, id := range strings.Split(ids, ",") {
-			if id = strings.TrimSpace(id); id != "" {
-				want[id] = true
-			}
-		}
-		var res []tinvest.Account
-		for _, a := range all {
-			if want[a.ID] {
-				res = append(res, a)
-			}
-		}
-		return res
-	}
-
+// selectAccounts отбирает все инвестиционные счета (брокерский и ИИС).
+func selectAccounts(all []tinvest.Account) []tinvest.Account {
 	var res []tinvest.Account
 	for _, a := range all {
 		switch a.Type {

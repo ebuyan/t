@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"strings"
 
-	"tportfolio/internal/tinvest"
+	"tinvest/internal/tinvest"
 )
 
 // Обновление блоков ```progressbar``` в файле долей. Бар — это прогресс к цели:

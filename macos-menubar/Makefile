@@ -3,8 +3,8 @@
 # Адрес ручки /api/today. Переопределяется: make run URL=http://…:8077/api/today
 URL    ?= http://192.168.0.108:8077/api/today
 
-BIN    := $(HOME)/Applications/tportfolio-menubar
-LABEL  := com.ebuyan.tportfolio-menubar
+BIN    := $(HOME)/Applications/tinvest-menubar
+LABEL  := com.ebuyan.tinvest-menubar
 PLIST  := $(HOME)/Library/LaunchAgents/$(LABEL).plist
 DOMAIN := gui/$(shell id -u)
 
@@ -15,11 +15,11 @@ release:                   ## релиз-сборка
 	swift build -c release
 
 run:                       ## запустить локально в терминале (для проверки)
-	TPORTFOLIO_URL="$(URL)" swift run
+	TINVEST_URL="$(URL)" swift run
 
 install: release           ## собрать релиз и разложить бинарник в ~/Applications
 	mkdir -p $(HOME)/Applications
-	cp .build/release/tportfolio-menubar $(BIN)
+	cp .build/release/tinvest-menubar $(BIN)
 
 autostart: install         ## установить/обновить LaunchAgent и запустить
 	mkdir -p $(HOME)/Library/LaunchAgents
