@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"sort"
+	"strings"
 	"time"
 
 	"tinvest/internal/tinvest"
@@ -154,7 +155,7 @@ func collectMeta(ctx context.Context, c *tinvest.Client, holdings []Holding) (*M
 		if err != nil {
 			return nil, err
 		}
-		m.Names[h.UID] = inst.Name
+		m.Names[h.UID] = trimShareSuffix(inst.Name)
 		m.Sectors[h.UID] = inst.Sector
 
 		divs, err := c.Dividends(ctx, h.UID, from, to)
@@ -170,6 +171,16 @@ func collectMeta(ctx context.Context, c *tinvest.Client, holdings []Holding) (*M
 		m.Dividends[h.Ticker] = y
 	}
 	return m, nil
+}
+
+// trimShareSuffix убирает хвост «- акции привилегированные» из названия бумаги
+// (API отдаёт его в inst.Name) — в подписях он лишний, тикер и так это показывает.
+func trimShareSuffix(name string) string {
+	trimmed := strings.TrimSpace(name)
+	if cut, ok := strings.CutSuffix(trimmed, "- акции привилегированные"); ok {
+		return strings.TrimSpace(cut)
+	}
+	return trimmed
 }
 
 // ShareBase — база для долей на странице и в виджете меню-бара: акции + золото +
