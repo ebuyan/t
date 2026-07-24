@@ -11,7 +11,7 @@ import (
 // чтобы шаблон в пакете web ничего не считал.
 type YieldView struct {
 	Updated      string
-	Total        string // стоимость акции + золото
+	Total        string // полная стоимость портфеля (акции + золото + кеш)
 	Income       string // абсолютный доход за всё время (акции + золото)
 	IncomePct    string // относительная доходность
 	IncomePos    bool
@@ -29,7 +29,7 @@ type YieldView struct {
 type AssetView struct {
 	Name     string
 	Value    string
-	Share    string // доля от базы (акции + золото)
+	Share    string // доля от базы (акции + золото + кеш)
 	Yield    string // абсолютный доход
 	YieldPct string // относительная доходность
 	Positive bool
@@ -51,18 +51,20 @@ type HoldingView struct {
 // (может быть nil — тогда показываем только тикеры): на странице это не критично.
 func BuildYieldView(s *Snapshot, m *Meta, updated time.Time) YieldView {
 	income := s.StockYield.Add(s.GoldYield)
+	base := s.ShareBase() // доли считаем от акции + золото + кеш
 
 	v := YieldView{
-		Updated:      updated.Format("2006-01-02 15:04:05 MST"),
-		Total:        money(s.Total),
-		Income:       signedMoney(income),
+		Updated: updated.Format("2006-01-02 15:04:05 MST"),
+		Total:   money(s.PortfolioValue),
+		Income:  signedMoney(income),
+		// Доходность — к вложенному в акции + золото (кеш дохода не даёт).
 		IncomePct:    signedPct(income.Percent(s.Total.Sub(income))),
 		IncomePos:    income.Sign() >= 0,
 		DayChange:    signedMoney(s.DayChange),
 		DayChangePct: signedPct(s.DayChangePct),
 		DayChangePos: s.DayChange.Sign() >= 0,
-		Shares:       buildAsset("Акции", s.Shares, s.StockYield, s.Total),
-		Gold:         buildAsset("Золото", s.Gold, s.GoldYield, s.Total),
+		Shares:       buildAsset("Акции", s.Shares, s.StockYield, base),
+		Gold:         buildAsset("Золото", s.Gold, s.GoldYield, base),
 	}
 	v.Holdings = buildHoldings(s, m)
 	return v
@@ -78,6 +80,7 @@ type holdingRow struct {
 // отсортированные по стоимости.
 func buildHoldings(s *Snapshot, m *Meta) []HoldingView {
 	rows := make([]holdingRow, 0, len(s.Holdings)+2)
+	base := s.ShareBase() // доли строк — от акции + золото + кеш
 
 	for _, h := range s.Holdings {
 		name := ""
@@ -89,7 +92,7 @@ func buildHoldings(s *Snapshot, m *Meta) []HoldingView {
 			Name:           name,
 			Price:          price(h.Price),
 			Value:          money(h.Value),
-			Share:          pct(h.Value.Percent(s.Total)),
+			Share:          pct(h.Value.Percent(base)),
 			Yield:          signedMoney(h.Yield),
 			YieldClass:     signClass(h.Yield),
 			DayChange:      signedMoney(h.DayChange),
@@ -103,7 +106,7 @@ func buildHoldings(s *Snapshot, m *Meta) []HoldingView {
 			Name:           "Золото",
 			Price:          dash,
 			Value:          money(s.Gold),
-			Share:          pct(s.Gold.Percent(s.Total)),
+			Share:          pct(s.Gold.Percent(base)),
 			Yield:          signedMoney(s.GoldYield),
 			YieldClass:     signClass(s.GoldYield),
 			DayChange:      signedMoney(s.GoldDayChange),
@@ -112,14 +115,14 @@ func buildHoldings(s *Snapshot, m *Meta) []HoldingView {
 	}
 
 	if !s.Cash.IsZero() {
-		// Кеш: доли/доходности нет, показываем только сумму — по ней видно приход
-		// дивидендов.
+		// Кеш: доля от той же базы (входит в 100%); доходности нет — по сумме
+		// видно приход дивидендов.
 		rows = append(rows, holdingRow{s.Cash, HoldingView{
 			Ticker:    "RUB",
 			Name:      "Кеш",
 			Price:     dash,
 			Value:     money(s.Cash),
-			Share:     dash,
+			Share:     pct(s.Cash.Percent(base)),
 			Yield:     dash,
 			DayChange: dash,
 		}})

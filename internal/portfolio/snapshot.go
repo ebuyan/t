@@ -172,6 +172,13 @@ func collectMeta(ctx context.Context, c *tinvest.Client, holdings []Holding) (*M
 	return m, nil
 }
 
+// ShareBase — база для долей на странице и в виджете меню-бара: акции + золото +
+// кеш. В сумме доли Акции/Золото/Кеш дают ровно 100%. Квартальный Портфель.md
+// использует свою историческую базу (акции + золото, s.Total) — см. assetValues.
+func (s *Snapshot) ShareBase() tinvest.Dec {
+	return s.Shares.Add(s.Gold).Add(s.Cash)
+}
+
 // ColumnDate — заголовок нового столбца, в формате уже используемом в файле.
 func (s *Snapshot) ColumnDate() string {
 	return s.Date.Format("2006.01.02")

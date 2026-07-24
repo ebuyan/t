@@ -154,10 +154,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(colored("Доход за всё время", "\(signedRub(t.income)) (\(signedPct(yieldPct(t.total, t.income))))", t.income))
 
         menu.addItem(.separator())
-        menu.addItem(assetItem("Акции", t.shares, base: t.total))
-        menu.addItem(assetItem("Золото", t.gold, base: t.total))
+        // База долей — акции + золото + кеш (в сумме 100%). t.total (акции +
+        // золото) оставляем для доходности выше — кеш дохода не даёт.
+        let shareBase = t.shares.value + t.gold.value + t.cash
+        menu.addItem(assetItem("Акции", t.shares, base: shareBase))
+        menu.addItem(assetItem("Золото", t.gold, base: shareBase))
         if t.cash != 0 {
-            menu.addItem(info("Кеш", rub(t.cash)))
+            // Кеш зелёным: доля от той же базы, доходности у кеша нет.
+            menu.addItem(colored("Кеш", "\(rub(t.cash))   \(pct(pctOf(t.cash, shareBase)))", t.cash))
         }
 
         if !t.holdings.isEmpty {

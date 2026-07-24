@@ -112,21 +112,27 @@ func applySnapshot(ctx context.Context, content string, s *Snapshot, m *Meta) (s
 
 // --- Значения столбцов из среза и метаданных ---
 
-// assetValues — строки таблицы «Актив».
+// assetValues — строки таблицы «Актив». База долей — акции + золото + кеш
+// (ShareBase), поэтому Акции/Золото/Кеш в сумме дают 100%; «Всего» — эта же база
+// в рублях (полная стоимость трёх классов).
 func assetValues(s *Snapshot) (map[string]string, []string) {
+	base := s.ShareBase()
 	return map[string]string{
-		"Акции":     pct(s.Shares.Percent(s.Total)),
-		"Золото":    pct(s.Gold.Percent(s.Total)),
-		"**Всего**": rub(s.Total),
-	}, []string{"Акции", "Золото", "**Всего**"}
+		"Акции":     pct(s.Shares.Percent(base)),
+		"Золото":    pct(s.Gold.Percent(base)),
+		"Кеш":       pct(s.Cash.Percent(base)),
+		"**Всего**": rub(base),
+	}, []string{"Акции", "Золото", "Кеш", "**Всего**"}
 }
 
-// companyValues — доли компаний от общей базы. Ключ — тикер, подпись «TICKER — Название».
+// companyValues — доли компаний от общей базы (акции + золото + кеш, как в таблице
+// «Актив»). Ключ — тикер, подпись «TICKER — Название».
 func companyValues(s *Snapshot, m *Meta) (byTicker, labels map[string]string, order []string) {
+	base := s.ShareBase()
 	byTicker = map[string]string{}
 	labels = map[string]string{}
 	for _, h := range s.Holdings {
-		byTicker[h.Ticker] = pct(h.Value.Percent(s.Total))
+		byTicker[h.Ticker] = pct(h.Value.Percent(base))
 		labels[h.Ticker] = fmt.Sprintf("%s — %s", h.Ticker, m.Names[h.UID])
 		order = append(order, h.Ticker)
 	}

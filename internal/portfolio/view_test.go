@@ -9,16 +9,17 @@ import (
 
 func TestBuildYieldView(t *testing.T) {
 	s := &Snapshot{
-		Date:          time.Date(2026, 7, 21, 10, 0, 0, 0, time.UTC),
-		Shares:        tinvest.DecUnits(1_000_000), // вложено 900 000, доход +100 000 → +11,11%
-		Gold:          tinvest.DecUnits(500_000),   // вложено 550 000, доход −50 000 → −9,09%
-		StockYield:    tinvest.DecUnits(100_000),
-		GoldYield:     tinvest.DecUnits(-50_000),
-		Total:         tinvest.DecUnits(1_500_000),
-		DayChange:     tinvest.DecUnits(12_000),
-		DayChangePct:  tinvest.DecUnits(1),
-		GoldDayChange: tinvest.DecUnits(3_000),
-		Cash:          tinvest.DecUnits(7_500),
+		Date:           time.Date(2026, 7, 21, 10, 0, 0, 0, time.UTC),
+		Shares:         tinvest.DecUnits(1_000_000), // вложено 900 000, доход +100 000 → +11,11%
+		Gold:           tinvest.DecUnits(500_000),   // вложено 550 000, доход −50 000 → −9,09%
+		StockYield:     tinvest.DecUnits(100_000),
+		GoldYield:      tinvest.DecUnits(-50_000),
+		Total:          tinvest.DecUnits(1_500_000),
+		DayChange:      tinvest.DecUnits(12_000),
+		DayChangePct:   tinvest.DecUnits(1),
+		GoldDayChange:  tinvest.DecUnits(3_000),
+		Cash:           tinvest.DecUnits(7_500),
+		PortfolioValue: tinvest.DecUnits(1_507_500), // акции + золото + кеш
 		Holdings: []Holding{{
 			Ticker:    "SBER",
 			Value:     tinvest.DecUnits(600_000),
@@ -31,6 +32,11 @@ func TestBuildYieldView(t *testing.T) {
 	m := &Meta{Names: map[string]string{"uid-sber": "Сбер Банк"}}
 
 	v := BuildYieldView(s, m, s.Date)
+
+	// «Всего» = полная стоимость портфеля (акции + золото + кеш), не база долей.
+	if v.Total != "1 507 500 ₽" {
+		t.Errorf("Total = %q, ожидалось %q", v.Total, "1 507 500 ₽")
+	}
 
 	// income = 100 000 − 50 000 = +50 000; вложено 1 450 000 → +3,45%.
 	if v.Income != "+50 000 ₽" {
@@ -60,8 +66,9 @@ func TestBuildYieldView(t *testing.T) {
 	if v.Gold.YieldPct != "-9,09%" {
 		t.Errorf("Gold.YieldPct = %q, ожидалось %q", v.Gold.YieldPct, "-9,09%")
 	}
-	if v.Shares.Share != "66,67%" {
-		t.Errorf("Shares.Share = %q, ожидалось %q", v.Shares.Share, "66,67%")
+	// База долей = акции + золото + кеш = 1 507 500; 1 000 000/1 507 500 = 66,33%.
+	if v.Shares.Share != "66,33%" {
+		t.Errorf("Shares.Share = %q, ожидалось %q", v.Shares.Share, "66,33%")
 	}
 	// Состав: SBER (600 000), золото (500 000), кеш (7 500) — по убыванию стоимости.
 	if len(v.Holdings) != 3 {
@@ -85,7 +92,8 @@ func TestBuildYieldView(t *testing.T) {
 		t.Errorf("строка золота = %+v", gold)
 	}
 	cash := v.Holdings[2]
-	if cash.Name != "Кеш" || cash.Value != "7 500 ₽" || cash.Share != "—" || cash.Yield != "—" {
+	// Кеш теперь с долей от той же базы: 7 500/1 507 500 = 0,50%.
+	if cash.Name != "Кеш" || cash.Value != "7 500 ₽" || cash.Share != "0,50%" || cash.Yield != "—" {
 		t.Errorf("строка кеша = %+v", cash)
 	}
 }
