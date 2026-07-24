@@ -17,6 +17,14 @@ var goldTickers = map[string]bool{
 	"GLDRUB_TOD": true,
 }
 
+// cashTickers — фонды денежного рынка (БПИФ ликвидности). API отдаёт их как
+// instrumentType "etf", отдельного класса активов под фонды нет; по смыслу это
+// припаркованные деньги, поэтому считаем их кэшом — идут в строку состава «Кеш»,
+// но не в базу долей (акции + золото).
+var cashTickers = map[string]bool{
+	"LQDT": true,
+}
+
 // Holding — позиция по акции в срезе: тикер, рублёвая стоимость и UID для справки,
 // текущая цена за штуку, доходность за всё время и изменение за сегодня.
 type Holding struct {
@@ -104,6 +112,9 @@ func collectSnapshot(ctx context.Context, c *tinvest.Client, accounts []tinvest.
 					Yield:     yield,
 					DayChange: day,
 				})
+			case cashTickers[pos.Ticker]:
+				// Фонды денежного рынка (LQDT) — считаем кэшом.
+				s.Cash = s.Cash.Add(value)
 			case pos.InstrumentType == "currency":
 				// Свободные средства (рубли и прочая валюта в рублёвой оценке);
 				// золото сюда не попадает — оно отсечено выше по тикеру.

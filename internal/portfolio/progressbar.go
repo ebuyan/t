@@ -35,6 +35,10 @@ func barSource(name string, s *Snapshot) (tinvest.Dec, bool) {
 		return s.Shares, true
 	case "gold":
 		return s.Gold, true
+	case "cash":
+		// Кэш = свободные рубли + фонды денежного рынка (LQDT), уже сведённые
+		// в s.Cash в collectSnapshot.
+		return s.Cash, true
 	case "reits":
 		// Отдельного класса недвижимости в портфеле пока нет — прогресс 0%.
 		return tinvest.Dec{}, true
