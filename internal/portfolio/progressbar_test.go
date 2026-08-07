@@ -112,6 +112,25 @@ func TestApplyProgressBarsIdempotent(t *testing.T) {
 	}
 }
 
+func TestApplyProgressBarsClampsAboveGoal(t *testing.T) {
+	// Цель перевыполнена (4.7М при цели 1М = 470%) — в value пишем ровно 100.
+	doc := "```progressbar\n" +
+		"kind: manual\n" +
+		"name: Total\n" +
+		"goal: 1000\n" +
+		"max: 100\n" +
+		"value: 0\n" +
+		"```\n"
+	out, n := applyProgressBars(t.Context(), doc, testSnap())
+
+	if n != 1 {
+		t.Errorf("изменено баров = %d, хотим 1", n)
+	}
+	if !strings.Contains(out, "max: 100\nvalue: 100\n") {
+		t.Errorf("value не ограничен сотней:\n%s", out)
+	}
+}
+
 func TestApplyProgressBarsSkipsWithoutGoal(t *testing.T) {
 	// Без поля goal бар не трогаем: миграции из max больше нет.
 	doc := "```progressbar\n" +

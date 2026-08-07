@@ -12,7 +12,8 @@ import (
 )
 
 // Обновление блоков ```progressbar``` в файле долей. Бар — это прогресс к цели:
-// value = накоплено ÷ цель × 100 (в процентах), max всегда 100. Цель хранится в
+// value = накоплено ÷ цель × 100 (в процентах, но не больше 100 — перевыполненная
+// цель показывается как полный бар), max всегда 100. Цель хранится в
 // самом блоке новым полем goal (в тысячах рублей) и правится вручную в Obsidian.
 // Обновляются только блоки kind: manual с известным по name классом; всё
 // остальное в файле (в т.ч. блоки day-year и текст вне блоков) сохраняется
@@ -151,8 +152,17 @@ func processBar(ctx context.Context, inner []string, s *Snapshot) ([]string, boo
 	}
 
 	goalRub := tinvest.DecUnits(goalK * goalScale)
-	out := rebuildBar(inner, b.hasValue, src.Percent(goalRub).String(0))
+	out := rebuildBar(inner, b.hasValue, barValue(src.Percent(goalRub)))
 	return out, !equalLines(inner, out)
+}
+
+// barValue приводит процент выполнения к значению value бара: цель перевыполнена —
+// пишем ровно 100 (max тоже 100, значение выше него бар отрисовать не может).
+func barValue(pct tinvest.Dec) string {
+	if pct.Cmp(tinvest.DecUnits(100)) > 0 {
+		return pbBarMax
+	}
+	return pct.String(0)
 }
 
 // rebuildBar переписывает строки блока: max → 100, value → процент. Прочие строки
