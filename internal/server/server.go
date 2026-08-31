@@ -79,10 +79,12 @@ func handleIndex(cfg Config) http.HandlerFunc {
 			return
 		}
 		// Метаданные (названия бумаг) — по возможности; их отсутствие не мешает
-		// показать доходность.
+		// показать доходность. Дивиденды тоже: пока история выплат не собрана,
+		// страница покажет доход без них, а через минуту обновится сама.
 		m, _, _ := cfg.Cache.Meta()
+		divs, _, _ := cfg.Cache.Dividends()
 
-		view := portfolio.BuildYieldView(s, m, updated)
+		view := portfolio.BuildYieldView(s, m, divs, updated)
 		view.CanSync = cfg.SyncRegistry != nil
 		view.CanSyncPortfolio = cfg.SyncPortfolio != nil
 

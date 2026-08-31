@@ -10,11 +10,15 @@ import (
 // YieldView — модель веб-страницы доходности: всё уже отформатировано в строки,
 // чтобы шаблон в пакете web ничего не считал.
 type YieldView struct {
-	Updated      string
-	Total        string // полная стоимость портфеля (акции + золото + кеш)
-	Income       string // абсолютный доход за всё время (акции + золото)
-	IncomePct    string // относительная доходность
-	IncomePos    bool
+	Updated   string
+	Total     string // полная стоимость портфеля (акции + золото + кеш)
+	Income    string // доход за всё время: переоценка позиций плюс дивиденды
+	IncomePct string // относительная доходность
+	IncomePos bool
+	// Dividends — полученные за всё время выплаты, отдельной строкой в карточке
+	// дохода. HasDividends — показывать ли строку (нет выплат — нет строки).
+	Dividends    string
+	HasDividends bool
 	DayChange    string // изменение за сегодня, рубли
 	DayChangePct string // изменение за сегодня, проценты
 	DayChangePos bool
@@ -52,8 +56,11 @@ type HoldingView struct {
 
 // BuildYieldView строит модель страницы из среза. Названия бумаг берутся из meta
 // (может быть nil — тогда показываем только тикеры): на странице это не критично.
-func BuildYieldView(s *Snapshot, m *Meta, updated time.Time) YieldView {
-	income := s.StockYield.Add(s.GoldYield)
+// dividends — полученные за всё время выплаты; в доходность позиций они не входят,
+// поэтому прибавляются к доходу отдельно.
+func BuildYieldView(s *Snapshot, m *Meta, dividends tinvest.Dec, updated time.Time) YieldView {
+	yield := s.StockYield.Add(s.GoldYield) // переоценка позиций, без выплат
+	income := yield.Add(dividends)
 	base := s.ShareBase() // доли считаем от акции + золото + кеш
 
 	v := YieldView{
@@ -61,8 +68,12 @@ func BuildYieldView(s *Snapshot, m *Meta, updated time.Time) YieldView {
 		Total:   money(s.PortfolioValue),
 		Income:  signedMoney(income),
 		// Доходность — к вложенному в акции + золото (кеш дохода не даёт).
-		IncomePct:    signedPct(income.Percent(s.Total.Sub(income))),
+		// Дивиденды уже выведены из позиций, поэтому знаменатель считаем от
+		// переоценки, а не от полного дохода.
+		IncomePct:    signedPct(income.Percent(s.Total.Sub(yield))),
 		IncomePos:    income.Sign() >= 0,
+		Dividends:    signedMoney(dividends),
+		HasDividends: !dividends.IsZero(),
 		DayChange:    signedMoney(s.DayChange),
 		DayChangePct: signedPct(s.DayChangePct),
 		DayChangePos: s.DayChange.Sign() >= 0,

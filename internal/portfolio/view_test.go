@@ -31,22 +31,30 @@ func TestBuildYieldView(t *testing.T) {
 	}
 	m := &Meta{Names: map[string]string{"uid-sber": "Сбер Банк"}}
 
-	v := BuildYieldView(s, m, s.Date)
+	v := BuildYieldView(s, m, tinvest.DecUnits(20_000), s.Date)
 
 	// «Всего» = полная стоимость портфеля (акции + золото + кеш), не база долей.
 	if v.Total != "1 507 500 ₽" {
 		t.Errorf("Total = %q, ожидалось %q", v.Total, "1 507 500 ₽")
 	}
 
-	// income = 100 000 − 50 000 = +50 000; вложено 1 450 000 → +3,45%.
-	if v.Income != "+50 000 ₽" {
-		t.Errorf("Income = %q, ожидалось %q", v.Income, "+50 000 ₽")
+	// Переоценка = 100 000 − 50 000 = +50 000, плюс 20 000 дивидендов = +70 000;
+	// вложено 1 450 000 (переоценка вычтена, дивиденды — нет) → +4,83%.
+	if v.Income != "+70 000 ₽" {
+		t.Errorf("Income = %q, ожидалось %q", v.Income, "+70 000 ₽")
 	}
-	if v.IncomePct != "+3,45%" {
-		t.Errorf("IncomePct = %q, ожидалось %q", v.IncomePct, "+3,45%")
+	if v.IncomePct != "+4,83%" {
+		t.Errorf("IncomePct = %q, ожидалось %q", v.IncomePct, "+4,83%")
+	}
+	if v.Dividends != "+20 000 ₽" || !v.HasDividends {
+		t.Errorf("Dividends = %q (has=%v), ожидалось %q", v.Dividends, v.HasDividends, "+20 000 ₽")
 	}
 	if !v.IncomePos {
 		t.Error("IncomePos = false, ожидалось true")
+	}
+	// Без выплат строка дивидендов на странице не показывается.
+	if empty := BuildYieldView(s, m, tinvest.Dec{}, s.Date); empty.HasDividends {
+		t.Error("HasDividends = true при нулевых дивидендах")
 	}
 	if v.DayChange != "+12 000 ₽" {
 		t.Errorf("DayChange = %q, ожидалось %q", v.DayChange, "+12 000 ₽")
@@ -107,7 +115,7 @@ func TestBuildYieldViewNilMeta(t *testing.T) {
 		Shares:   tinvest.DecUnits(600_000),
 		Holdings: []Holding{{Ticker: "SBER", Value: tinvest.DecUnits(600_000), UID: "uid-sber"}},
 	}
-	v := BuildYieldView(s, nil, s.Date)
+	v := BuildYieldView(s, nil, tinvest.Dec{}, s.Date)
 	if v.Holdings[0].Name != "" {
 		t.Errorf("без meta имя должно быть пустым, получили %q", v.Holdings[0].Name)
 	}

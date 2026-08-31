@@ -15,44 +15,55 @@ const roundStep = 1000
 
 // registryEntry — одна запись реестра в формате inline-полей Dataview.
 type registryEntry struct {
-	date   string
-	income tinvest.Dec
-	stock  tinvest.Dec
-	gold   tinvest.Dec
+	date      string
+	income    tinvest.Dec
+	stock     tinvest.Dec
+	gold      tinvest.Dec
+	dividends tinvest.Dec
 }
 
-func newRegistryEntry(s *Snapshot) registryEntry {
+// newRegistryEntry строит запись из среза и суммы дивидендов, полученных к этой
+// дате. Дивиденды приходят деньгами и в доходность позиций не попадают, поэтому
+// без них income занижал бы результат.
+func newRegistryEntry(s *Snapshot, dividends tinvest.Dec) registryEntry {
 	stock := s.StockYield.CeilTo(roundStep)
 	gold := s.GoldYield.CeilTo(roundStep)
+	divs := dividends.CeilTo(roundStep)
 	return registryEntry{
 		date: s.Date.Format("2006-01-02"),
 		// income считаем от уже округлённых слагаемых, иначе в файле
-		// нарушится инвариант income = stock + gold.
-		income: stock.Add(gold),
-		stock:  stock,
-		gold:   gold,
+		// нарушится инвариант income = stock + gold + dividends.
+		income:    stock.Add(gold).Add(divs),
+		stock:     stock,
+		gold:      gold,
+		dividends: divs,
 	}
 }
 
+// render печатает поля в фиксированном порядке: dataviewjs в волте разбирает
+// блок текстом по номерам строк (date→income→stock→gold), поэтому dividends
+// приписаны последними — иначе сломаются графики.
 func (e registryEntry) render() []string {
 	return []string{
 		"- date:: " + e.date,
 		"  income:: " + e.income.String(0),
 		"  stock:: " + e.stock.String(0),
 		"  gold:: " + e.gold.String(0),
+		"  dividends:: " + e.dividends.String(0),
 	}
 }
 
 // UpdateRegistryFile добавляет запись в начало реестра. Как и файл долей,
 // пишется через атомарную замену — файл живёт в синкающемся волте.
-func UpdateRegistryFile(ctx context.Context, path string, s *Snapshot) error {
+// dividends — полученные за всё время выплаты на момент среза.
+func UpdateRegistryFile(ctx context.Context, path string, s *Snapshot, dividends tinvest.Dec) error {
 	//nolint:gosec // путь берётся из доверенного env-конфига, не из пользовательского ввода
 	content, err := os.ReadFile(path)
 	if err != nil {
 		return fmt.Errorf("read %s: %w", path, err)
 	}
 
-	entry := newRegistryEntry(s)
+	entry := newRegistryEntry(s, dividends)
 	updated := upsertEntry(string(content), entry)
 	if updated == string(content) {
 		slog.InfoContext(ctx, "registry entry already up to date", slog.String("date", entry.date))
@@ -64,6 +75,7 @@ func UpdateRegistryFile(ctx context.Context, path string, s *Snapshot) error {
 		slog.String("income", entry.income.String(0)),
 		slog.String("stock", entry.stock.String(0)),
 		slog.String("gold", entry.gold.String(0)),
+		slog.String("dividends", entry.dividends.String(0)),
 	)
 
 	return writeAtomic(path, []byte(updated))

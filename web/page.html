@@ -70,6 +70,7 @@
       <div class="label">Доход за всё время</div>
       <div class="big {{if .IncomePos}}pos{{else}}neg{{end}}">{{.Income}}</div>
       <div class="sub {{if .IncomePos}}pos{{else}}neg{{end}}">{{.IncomePct}}</div>
+      {{if .HasDividends}}<div class="sub muted">в том числе дивиденды {{.Dividends}}</div>{{end}}
     </div>
   </div>
 

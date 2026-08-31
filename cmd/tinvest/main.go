@@ -53,7 +53,7 @@ func run() error {
 		server.Serve(ctx, server.Config{
 			Addr:          cfg.HTTPAddr,
 			Cache:         cache,
-			SyncRegistry:  registrySync(cfg.RegistryFile, cfg.PortfolioFile),
+			SyncRegistry:  registrySync(cache, cfg.RegistryFile, cfg.PortfolioFile),
 			SyncPortfolio: portfolioSync(cfg.PortfolioFile),
 		})
 	}()
@@ -82,12 +82,16 @@ func run() error {
 // registrySync возвращает функцию записи среза в реестр или nil, если реестр не
 // сконфигурирован (тогда кнопка синхронизации на странице скрыта). Если задан файл
 // долей, заодно обновляет бары прогресса в нём.
-func registrySync(registryFile, portfolioFile string) func(context.Context, *portfolio.Snapshot) error {
+func registrySync(c *portfolio.Cache, registryFile, portfolioFile string) func(context.Context, *portfolio.Snapshot) error {
 	if registryFile == "" {
 		return nil
 	}
 	return func(ctx context.Context, s *portfolio.Snapshot) error {
-		return writeRegistry(ctx, s, registryFile, portfolioFile)
+		divs, _, err := c.Dividends()
+		if err != nil {
+			return err
+		}
+		return writeRegistry(ctx, s, divs, registryFile, portfolioFile)
 	}
 }
 
@@ -104,8 +108,10 @@ func portfolioSync(portfolioFile string) func(context.Context, *portfolio.Snapsh
 
 // writeRegistry дописывает срез в реестр и, если задан файл долей, пересчитывает в
 // нём бары прогресса. Общая точка для расписания и кнопки на странице.
-func writeRegistry(ctx context.Context, s *portfolio.Snapshot, registryFile, portfolioFile string) error {
-	if err := portfolio.UpdateRegistryFile(ctx, registryFile, s); err != nil {
+func writeRegistry(
+	ctx context.Context, s *portfolio.Snapshot, dividends tinvest.Dec, registryFile, portfolioFile string,
+) error {
+	if err := portfolio.UpdateRegistryFile(ctx, registryFile, s, dividends); err != nil {
 		return err
 	}
 	if portfolioFile != "" {
@@ -127,7 +133,13 @@ func startRegistrySchedule(ctx context.Context, c *portfolio.Cache, schCfg, regi
 		if err != nil {
 			return err
 		}
-		return writeRegistry(ctx, s, registryFile, portfolioFile)
+		// Без истории выплат запись пропускаем: income без дивидендов испортил бы
+		// ряд, а следующее срабатывание запишет уже полную цифру.
+		divs, _, err := c.Dividends()
+		if err != nil {
+			return err
+		}
+		return writeRegistry(ctx, s, divs, registryFile, portfolioFile)
 	})
 }
 
