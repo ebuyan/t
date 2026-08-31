@@ -114,16 +114,21 @@ type holdingJSON struct {
 // todayResponse — сводка «всего за сегодня» для виджета. Все суммы в рублях,
 // day_change_pct — в процентах. Проценты долей и доходности виджет считает сам.
 type todayResponse struct {
-	PortfolioValue json.Number   `json:"portfolio_value"` // полная стоимость (с кэшем и облигациями)
-	Total          json.Number   `json:"total"`           // база долей: акции + золото
-	DayChange      json.Number   `json:"day_change"`
-	DayChangePct   json.Number   `json:"day_change_pct"`
-	Income         json.Number   `json:"income"` // доход за всё время (акции + золото)
-	Shares         assetJSON     `json:"shares"`
-	Gold           assetJSON     `json:"gold"`
-	Cash           json.Number   `json:"cash"`
-	Holdings       []holdingJSON `json:"holdings"`
-	Updated        string        `json:"updated"`
+	PortfolioValue json.Number `json:"portfolio_value"` // полная стоимость (с кэшем и облигациями)
+	Total          json.Number `json:"total"`           // база долей: акции + золото
+	DayChange      json.Number `json:"day_change"`
+	DayChangePct   json.Number `json:"day_change_pct"`
+	// Income — курсовая доходность за всё время (акции + золото). Дивиденды в неё
+	// не входят: они приходят деньгами и в expectedYield позиций не попадают.
+	Income json.Number `json:"income"`
+	// Dividends — полученные за всё время дивиденды (за вычетом налога). Полный
+	// доход за всё время = income + dividends; считает потребитель.
+	Dividends json.Number   `json:"dividends"`
+	Shares    assetJSON     `json:"shares"`
+	Gold      assetJSON     `json:"gold"`
+	Cash      json.Number   `json:"cash"`
+	Holdings  []holdingJSON `json:"holdings"`
+	Updated   string        `json:"updated"`
 }
 
 // handleAPIToday отдаёт JSON-сводку из кеша: полная стоимость портфеля, изменение
@@ -142,6 +147,9 @@ func handleAPIToday(cfg Config) http.HandlerFunc {
 		}
 		// Названия по возможности; их отсутствие не мешает отдать сводку.
 		m, _, _ := cfg.Cache.Meta()
+		// Дивиденды тоже по возможности: пока история выплат не собрана, отдаём
+		// ноль — сводка без них полезнее, чем ошибка.
+		divs, _, _ := cfg.Cache.Dividends()
 
 		resp := todayResponse{
 			PortfolioValue: num(s.PortfolioValue),
@@ -149,6 +157,7 @@ func handleAPIToday(cfg Config) http.HandlerFunc {
 			DayChange:      num(s.DayChange),
 			DayChangePct:   num(s.DayChangePct),
 			Income:         num(s.StockYield.Add(s.GoldYield)),
+			Dividends:      num(divs),
 			Shares:         assetJSON{Value: num(s.Shares), Yield: num(s.StockYield)},
 			Gold:           assetJSON{Value: num(s.Gold), Yield: num(s.GoldYield)},
 			Cash:           num(s.Cash),

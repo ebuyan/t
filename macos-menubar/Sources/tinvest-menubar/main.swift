@@ -32,7 +32,11 @@ struct Today: Decodable {
     let total: Double
     let dayChange: Double
     let dayChangePct: Double
+    // income — курсовая переоценка позиций (акции + золото), без дивидендов.
     let income: Double
+    // dividends — полученные за всё время дивиденды за вычетом налога.
+    // Опционально: старая сборка сервиса поля ещё не отдаёт.
+    let dividends: Double?
     let shares: Asset
     let gold: Asset
     let cash: Double
@@ -41,7 +45,7 @@ struct Today: Decodable {
 
     enum CodingKeys: String, CodingKey {
         case portfolioValue = "portfolio_value"
-        case total, income, shares, gold, cash, holdings, updated
+        case total, income, dividends, shares, gold, cash, holdings, updated
         case dayChange = "day_change"
         case dayChangePct = "day_change_pct"
     }
@@ -151,7 +155,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let menu = NSMenu()
         menu.addItem(info("Стоимость портфеля", rub(t.portfolioValue)))
         menu.addItem(colored("За сегодня", "\(signedRub(t.dayChange)) (\(signedPct(t.dayChangePct)))", t.dayChange))
-        menu.addItem(colored("Доход за всё время", "\(signedRub(t.income)) (\(signedPct(yieldPct(t.total, t.income))))", t.income))
+        // Доход за всё время = курсовая переоценка + полученные дивиденды.
+        // Знаменатель — вложенное в акции и золото (стоимость минус курсовой
+        // доход): дивиденды уже выведены из позиций и лежат в кеше.
+        let dividends = t.dividends ?? 0
+        let income = t.income + dividends
+        let invested = t.total - t.income
+        menu.addItem(colored("Доход за всё время", "\(signedRub(income)) (\(signedPct(pctOf(income, invested))))", income))
 
         menu.addItem(.separator())
         // База долей — акции + золото + кеш (в сумме 100%). t.total (акции +
@@ -162,6 +172,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if t.cash != 0 {
             // Кеш зелёным: доля от той же базы, доходности у кеша нет.
             menu.addItem(colored("Кеш", "\(rub(t.cash))   \(pct(pctOf(t.cash, shareBase)))", t.cash))
+        }
+        if dividends != 0 {
+            // Дивиденды — не класс активов, а сумма выплат за всё время, поэтому
+            // без доли: деньги уже лежат в кеше или вложены обратно в бумаги.
+            menu.addItem(colored("Дивиденды", rub(dividends), dividends))
         }
 
         if !t.holdings.isEmpty {

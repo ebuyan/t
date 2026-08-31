@@ -144,6 +144,9 @@ type Account struct {
 	Name        string `json:"name"`
 	Status      string `json:"status"`
 	AccessLevel string `json:"accessLevel"`
+	// OpenedDate — дата открытия счёта. Нужна как начало периода истории
+	// операций: раньше неё выплат быть не может.
+	OpenedDate time.Time `json:"openedDate"`
 }
 
 func (c *Client) GetAccounts(ctx context.Context) ([]Account, error) {
