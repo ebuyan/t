@@ -127,7 +127,16 @@ func collectMeta(ctx context.Context, c *tinvest.Client, holdings []Holding) (*M
 
 	for _, h := range holdings {
 		inst, err := shareInfo(ctx, c, &h)
-		if err != nil {
+		switch {
+		case err == nil:
+		case h.UID == "":
+			// Акция другого брокера, которую справочник T-Invest не нашёл по
+			// тикеру (другой режим торгов и т.п.): без названия и сектора, но
+			// остальные бумаги справку получат.
+			slog.WarnContext(ctx, "share info by ticker failed, skipping",
+				slog.String("ticker", h.Ticker), slog.Any("error", err))
+			continue
+		default:
 			return nil, err
 		}
 		m.Names[h.Ticker] = trimShareSuffix(inst.Name)

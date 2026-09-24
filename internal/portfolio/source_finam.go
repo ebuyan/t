@@ -93,36 +93,40 @@ func (f *FinamSource) addAccount(ctx context.Context, acc *finam.Account, part *
 			Yield:     pos.UnrealizedPnL.Dec,
 			DayChange: pos.DailyPnL.Dec,
 		}
-		if a := f.asset(ctx, pos.Symbol, acc.AccountID); a != nil {
+		a, err := f.asset(ctx, pos.Symbol, acc.AccountID)
+		switch {
+		case err == nil:
 			p.Kind = finamKind(a.Type)
 			p.Name = a.Name
+		case !knownByTicker(p.Ticker):
+			// Без справки класс не определить: акция молча ушла бы «вне классов»
+			// и занизила доли и реестр. Лучше ошибка среза — кеш отдаст прошлый.
+			return fmt.Errorf("finam asset %s: %w", pos.Symbol, err)
 		}
+		// Иначе класс известен по тикеру (золото, LQDT, ЗПИФ), справка не нужна.
 		part.DayChange = part.DayChange.Add(p.DayChange)
 		part.Positions = append(part.Positions, p)
 	}
 	return nil
 }
 
-// asset возвращает справку по инструменту из кеша или API. Ошибка не валит срез:
-// без справки бумага останется без типа и названия, а золото, фонды ликвидности и
-// известные ЗПИФ всё равно узнаются по тикеру. Неудача не кешируется.
-func (f *FinamSource) asset(ctx context.Context, symbol, accountID string) *finam.Asset {
+// asset возвращает справку по инструменту из кеша или API. Удачный ответ живёт
+// весь процесс, неудача не кешируется — следующий срез спросит снова.
+func (f *FinamSource) asset(ctx context.Context, symbol, accountID string) (*finam.Asset, error) {
 	f.mu.Lock()
 	a, ok := f.assets[symbol]
 	f.mu.Unlock()
 	if ok {
-		return a
+		return a, nil
 	}
 	a, err := f.client.GetAsset(ctx, symbol, accountID)
 	if err != nil {
-		slog.WarnContext(ctx, "finam asset fetch failed",
-			slog.String("symbol", symbol), slog.Any("error", err))
-		return nil
+		return nil, err
 	}
 	f.mu.Lock()
 	f.assets[symbol] = a
 	f.mu.Unlock()
-	return a
+	return a, nil
 }
 
 // finamKind переводит тип инструмента из справки Финама в общий тип.

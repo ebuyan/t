@@ -149,10 +149,10 @@ func TestBuildYieldViewRealty(t *testing.T) {
 	}
 	found := false
 	for _, h := range v.Holdings {
-		// Фонд из справочника подписан коротким именем вместо кода.
-		if h.Ticker == "Современный 7" {
+		// Тикер — код, название — короткое имя из справочника.
+		if h.Ticker == "RU000A1034U7" {
 			found = true
-			if h.Name != "" || h.Share != "40,00%" {
+			if h.Name != "Современный 7" || h.Share != "40,00%" {
 				t.Errorf("строка фонда = %+v", h)
 			}
 		}

@@ -203,7 +203,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             rows.append(Row(label: "Дивиденды", cols: [rub(dividends)], sign: dividends))
         }
         rows.append(nil)
-        rows.append(Row(label: "Обновлено", cols: [shortTime(t.updated)]))
 
         let menu = NSMenu()
         for item in tableItems(rows) {
@@ -212,7 +211,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(hideToggleItem())
         menu.addItem(withKey("Обновить сейчас", #selector(refreshNow), "r"))
         menu.addItem(withKey("Выход", #selector(quit), "q"))
+        menu.addItem(.separator())
+        menu.addItem(footerItem("Обновлено в \(shortTime(t.updated))"))
         statusItem.menu = menu
+    }
+
+    // footerItem — подвал меню: неактивная подпись по центру. Обычный пункт текст
+    // не центрирует, поэтому это пункт со своим view: меню растягивает его на всю
+    // ширину (autoresizingMask), а надпись выравнивается по центру внутри.
+    private func footerItem(_ text: String) -> NSMenuItem {
+        let label = NSTextField(labelWithString: text)
+        label.font = NSFont.menuFont(ofSize: NSFont.smallSystemFontSize)
+        label.textColor = .disabledControlTextColor
+        label.alignment = .center
+        label.sizeToFit()
+
+        let height = label.frame.height + 6
+        let view = NSView(frame: NSRect(x: 0, y: 0, width: label.frame.width + 40, height: height))
+        view.autoresizingMask = [.width]
+        label.frame = NSRect(x: 0, y: 3, width: view.frame.width, height: label.frame.height)
+        label.autoresizingMask = [.width]
+        view.addSubview(label)
+
+        let item = NSMenuItem()
+        item.view = view
+        item.isEnabled = false
+        return item
     }
 
     // hideToggleItem — переключатель скрытия содержимого (для шаринга экрана).
@@ -256,7 +280,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let sub = NSMenu()
         let rows: [Row?] = holdings.sorted(by: { $0.dayChange > $1.dayChange }).map { h in
             Row(
-                label: h.name.map { "\(h.ticker) — \($0)" } ?? h.ticker,
+                label: holdingLabel(h),
                 cols: [rub(h.value), signedRub(h.dayChange)],
                 sign: h.dayChange
             )
@@ -265,6 +289,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             sub.addItem(item)
         }
         return sub
+    }
+
+    // holdingLabel — подпись бумаги в подменю: «тикер — название». У фонда
+    // недвижимости код пая обычно равен ISIN и ничего не говорит, поэтому
+    // показываем только название (короткое имя фонда от сервиса).
+    private func holdingLabel(_ h: Holding) -> String {
+        guard let name = h.name, !name.isEmpty else { return h.ticker }
+        return h.inferredClass == "realty" ? name : "\(h.ticker) — \(name)"
     }
 
     // tableItems собирает пункты меню из строк: подпись слева, значения — по

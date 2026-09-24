@@ -2,6 +2,9 @@ package portfolio
 
 import (
 	"encoding/json"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -88,7 +91,8 @@ func TestHoldingLabel(t *testing.T) {
 		h          Holding
 		ticker, nm string
 	}{
-		{Holding{Ticker: "RU000A105328", Name: "ЗПИФ Парус-ЛОГ"}, "Парус-Логистика", ""},
+		// Тикер остаётся кодом, короткое имя из справочника — названием.
+		{Holding{Ticker: "RU000A105328", Name: "ЗПИФ Парус-ЛОГ"}, "RU000A105328", "Парус-Логистика"},
 		{Holding{Ticker: "SBER", Name: "Сбер от брокера"}, "SBER", "Сбербанк"},
 		{Holding{Ticker: "NEWFUND", Name: "Новый фонд"}, "NEWFUND", "Новый фонд"},
 	}
@@ -193,5 +197,39 @@ func TestAssetTableInsertsRealty(t *testing.T) {
 	}
 	if again != out {
 		t.Errorf("повторный прогон изменил таблицу:\n%s", again)
+	}
+}
+
+// Справка Финама недоступна: бумагу, которую не узнать по тикеру, нельзя молча
+// выкинуть «вне классов» — это ошибка источника. Известный по тикеру ЗПИФ
+// справка не нужна.
+func TestFinamSourceAssetFailure(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /v1/sessions", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = io.WriteString(w, `{"token":"jwt"}`)
+	})
+	mux.HandleFunc("GET /v1/assets/{symbol}", func(w http.ResponseWriter, _ *http.Request) {
+		http.Error(w, `{"code":5,"message":"not found"}`, http.StatusNotFound)
+	})
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	f := NewFinamSource(finam.NewClient("s", finam.WithBaseURL(srv.URL)))
+
+	acc := func(symbol string) *finam.Account {
+		return &finam.Account{AccountID: "A1", Positions: []finam.Position{
+			{Symbol: symbol, Quantity: finamDec(t, "1"), CurrentPrice: finamDec(t, "100")},
+		}}
+	}
+
+	if err := f.addAccount(t.Context(), acc("SBER@MISX"), &SourcePortfolio{}); err == nil {
+		t.Error("акция без справки: ожидалась ошибка источника")
+	}
+
+	part := &SourcePortfolio{}
+	if err := f.addAccount(t.Context(), acc("XACCSK@MISX"), part); err != nil {
+		t.Fatalf("ЗПИФ из справочника без справки: %v", err)
+	}
+	if s := buildSnapshot(time.Now(), []*SourcePortfolio{part}); s.Realty.String(0) != "100" {
+		t.Errorf("недвижимость = %s, ожидалось 100", s.Realty.String(0))
 	}
 }

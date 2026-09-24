@@ -97,6 +97,12 @@ func classify(p *Position) assetClass {
 	}
 }
 
+// knownByTicker — класс бумаги определяется по одному тикеру, без типа от
+// брокера: золото, фонды ликвидности и ЗПИФ из справочника.
+func knownByTicker(ticker string) bool {
+	return goldTickers[ticker] || cashTickers[ticker] || isRealtyFund(ticker)
+}
+
 // buildSnapshot складывает вклады источников в один срез.
 func buildSnapshot(now time.Time, parts []*SourcePortfolio) *Snapshot {
 	s := &Snapshot{Date: now}
@@ -140,6 +146,7 @@ func (s *Snapshot) addPosition(p *Position) {
 
 // mergeHolding добавляет позицию в состав класса, складывая её с уже учтённой по
 // тому же тикеру: одна бумага у двух брокеров или на двух счетах — одна строка.
+// Цена остаётся от первого брокера: у одной бумаги она одна и та же.
 func mergeHolding(hs []Holding, p *Position) []Holding {
 	for i := range hs {
 		h := &hs[i]
