@@ -20,7 +20,7 @@ func TestPageRenders(t *testing.T) {
 		Total:      tinvest.DecUnits(1_500_000),
 		Holdings:   []portfolio.Holding{{Ticker: "SBER", Value: tinvest.DecUnits(600_000), UID: "uid-sber"}},
 	}
-	m := &portfolio.Meta{Names: map[string]string{"uid-sber": "Сбер Банк"}}
+	m := &portfolio.Meta{Names: map[string]string{"SBER": "Сбер Банк"}}
 
 	view := portfolio.BuildYieldView(s, m, tinvest.DecUnits(20_000), s.Date)
 	view.CanSync = true

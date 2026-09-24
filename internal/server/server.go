@@ -181,13 +181,10 @@ func handleAPIToday(cfg Config) http.HandlerFunc {
 		}
 		add := func(class string, hs []portfolio.Holding) {
 			for _, h := range hs {
-				name := ""
-				if m != nil {
-					name = m.Names[h.UID]
-				}
+				ticker, name := portfolio.HoldingLabel(&h, m)
 				resp.Holdings = append(resp.Holdings, holdingJSON{
 					Class:     class,
-					Ticker:    h.Ticker,
+					Ticker:    ticker,
 					Name:      name,
 					Value:     num(h.Value),
 					DayChange: num(h.DayChange),

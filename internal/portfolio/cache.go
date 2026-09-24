@@ -7,7 +7,6 @@ import (
 	"sync"
 	"time"
 
-	"tinvest/internal/finam"
 	"tinvest/internal/tinvest"
 )
 
@@ -21,95 +20,67 @@ const (
 	dividendsTTL = time.Hour
 )
 
-// Collector ходит в T-Invest API и, если задан, в Finam Trade API за срезом и
-// метаданными по инвестиционным счетам.
+// Collector собирает срез из всех источников (брокеров) и справку по акциям.
 type Collector struct {
-	client *tinvest.Client
-	// finam — счета Финама (недвижимость); nil, если токен Финама не задан.
-	finam *finam.Client
+	sources []Source
+	// ref — справочник акций (названия, секторы, дивидендная доходность) для
+	// любой бумаги Мосбиржи, где бы она ни лежала.
+	ref *tinvest.Client
 }
 
-// NewCollector создаёт сборщик. fin может быть nil — тогда в срезе только Т-Банк.
-func NewCollector(client *tinvest.Client, fin *finam.Client) *Collector {
-	return &Collector{client: client, finam: fin}
+// NewCollector создаёт сборщик по списку источников. ref — клиент T-Invest API для
+// справки по акциям.
+func NewCollector(ref *tinvest.Client, sources ...Source) *Collector {
+	return &Collector{sources: sources, ref: ref}
 }
 
-// Snapshot собирает лёгкий срез: GetPortfolio по счетам Т-Банка и GetAccount по
-// счетам Финама. Ошибка любого брокера — ошибка всего среза: неполный срез
-// испортил бы доли и реестр, а кеш тем временем отдаёт прошлый целый.
+// Snapshot собирает лёгкий срез по всем источникам. Ошибка любого источника —
+// ошибка всего среза: неполный срез испортил бы доли и реестр, а кеш тем временем
+// отдаёт прошлый целый.
 func (c *Collector) Snapshot(ctx context.Context) (*Snapshot, error) {
 	ctx, cancel := context.WithTimeout(ctx, time.Minute)
 	defer cancel()
 
-	targets, err := c.accounts(ctx)
-	if err != nil {
-		return nil, err
-	}
-	s := &Snapshot{Date: time.Now()}
-	if err := collectSnapshot(ctx, c.client, targets, s); err != nil {
-		return nil, err
-	}
-	if c.finam != nil {
-		if err := collectFinam(ctx, c.finam, s); err != nil {
-			return nil, fmt.Errorf("finam: %w", err)
+	parts := make([]*SourcePortfolio, 0, len(c.sources))
+	for _, src := range c.sources {
+		part, err := src.Portfolio(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", src.Name(), err)
 		}
+		parts = append(parts, part)
 	}
-	s.finish()
-	return s, nil
+	return buildSnapshot(time.Now(), parts), nil
 }
 
-// Dividends собирает полученные за всё время выплаты по всем счетам: дивиденды
-// Т-Банка (GetOperationsByCursor с начала истории) и выплаты по бумагам и паям на
-// Финаме. Долгая история, поэтому отдельно от среза.
+// Dividends собирает полученные за всё время выплаты по всем источникам. Долгая
+// история, поэтому отдельно от среза.
 func (c *Collector) Dividends(ctx context.Context) (tinvest.Dec, error) {
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
 
-	targets, err := c.accounts(ctx)
-	if err != nil {
-		return tinvest.Dec{}, err
-	}
 	now := time.Now()
-	total, err := collectDividends(ctx, c.client, targets, now)
-	if err != nil {
-		return tinvest.Dec{}, err
-	}
-	if c.finam != nil {
-		fin, err := collectFinamPayouts(ctx, c.finam, now)
+	var total tinvest.Dec
+	for _, src := range c.sources {
+		d, err := src.Payouts(ctx, now)
 		if err != nil {
-			return tinvest.Dec{}, fmt.Errorf("finam payouts: %w", err)
+			return tinvest.Dec{}, fmt.Errorf("%s payouts: %w", src.Name(), err)
 		}
-		total = total.Add(fin)
+		total = total.Add(d)
 	}
 	return total, nil
 }
 
-// accounts возвращает инвестиционные счета, по которым работаем.
-func (c *Collector) accounts(ctx context.Context) ([]tinvest.Account, error) {
-	all, err := c.client.GetAccounts(ctx)
-	if err != nil {
-		return nil, err
-	}
-	targets := selectAccounts(all)
-	if len(targets) == 0 {
-		return nil, fmt.Errorf("no matching accounts found (available: %d)", len(all))
-	}
-	return targets, nil
-}
-
-// Meta собирает справку по бумагам среза (дорого: ShareBy + GetDividends на
-// бумагу) и названия фондов недвижимости с Финама.
+// Meta собирает справку по акциям среза (дорого: ShareBy + GetDividends на
+// бумагу). Заодно предупреждает о позициях вне классов — раз в час, а не на
+// каждом минутном срезе.
 func (c *Collector) Meta(ctx context.Context, s *Snapshot) (*Meta, error) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 	defer cancel()
-	m, err := collectMeta(ctx, c.client, s.Holdings)
-	if err != nil {
-		return nil, err
+	if len(s.Unclassified) > 0 {
+		slog.WarnContext(ctx, "positions outside asset classes, counted only in portfolio value",
+			slog.Any("tickers", s.Unclassified))
 	}
-	if c.finam != nil {
-		collectFinamNames(ctx, c.finam, s.RealtyHoldings, m)
-	}
-	return m, nil
+	return collectMeta(ctx, c.ref, s.Holdings)
 }
 
 // Cache хранит последний срез и метаданные. Из среза читают и веб-страница, и

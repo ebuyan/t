@@ -7,6 +7,7 @@ import (
 
 // Instrument — справочные данные инструмента из InstrumentsService.
 type Instrument struct {
+	UID    string `json:"uid"`
 	Ticker string `json:"ticker"`
 	Name   string `json:"name"`
 	Sector string `json:"sector"`
@@ -19,6 +20,19 @@ func (c *Client) ShareByUID(ctx context.Context, uid string) (*Instrument, error
 		Instrument Instrument `json:"instrument"`
 	}
 	req := map[string]string{"idType": "INSTRUMENT_ID_TYPE_UID", "id": uid}
+	if err := c.call(ctx, "InstrumentsService", "ShareBy", req, &resp); err != nil {
+		return nil, err
+	}
+	return &resp.Instrument, nil
+}
+
+// ShareByTicker возвращает справку по акции Мосбиржи (режим TQBR) по тикеру —
+// для бумаг, которые лежат у другого брокера и UID Т-Банка не имеют.
+func (c *Client) ShareByTicker(ctx context.Context, ticker string) (*Instrument, error) {
+	var resp struct {
+		Instrument Instrument `json:"instrument"`
+	}
+	req := map[string]string{"idType": "INSTRUMENT_ID_TYPE_TICKER", "classCode": "TQBR", "id": ticker}
 	if err := c.call(ctx, "InstrumentsService", "ShareBy", req, &resp); err != nil {
 		return nil, err
 	}

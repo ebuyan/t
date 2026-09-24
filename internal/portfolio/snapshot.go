@@ -2,6 +2,7 @@ package portfolio
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"sort"
 	"strings"
@@ -29,17 +30,21 @@ var cashTickers = map[string]bool{
 // Holding — позиция по акции в срезе: тикер, рублёвая стоимость и UID для справки,
 // текущая цена за штуку, доходность за всё время и изменение за сегодня.
 type Holding struct {
-	Ticker    string
+	// Ticker — биржевой код; по нему позиции разных брокеров складываются в одну
+	// строку, а Meta хранит справку.
+	Ticker string
+	// Name — название от брокера (запасное, если в Meta названия нет).
+	Name      string
 	Value     tinvest.Dec // стоимость позиции в рублях
-	UID       string
+	UID       string      // идентификатор Т-Банка, если бумага там есть
 	Price     tinvest.Dec // текущая цена за штуку
 	Yield     tinvest.Dec // доходность за всё время (expectedYield)
 	DayChange tinvest.Dec // изменение за сегодня (dailyYield)
 }
 
-// Snapshot — лёгкий срез портфеля: только суммы и стоимости из GetPortfolio, без
-// походов в InstrumentsService. Собирается фоном раз в минуту и используется
-// веб-страницей и реестром доходности.
+// Snapshot — лёгкий срез портфеля по всем источникам (buildSnapshot): суммы по
+// классам и состав, без справки по инструментам. Собирается фоном раз в минуту и
+// используется веб-страницей и реестром доходности.
 type Snapshot struct {
 	Date time.Time
 	// Total — вложенное в доходные активы: акции + золото + недвижимость. Кеш дохода
@@ -47,7 +52,7 @@ type Snapshot struct {
 	Total  tinvest.Dec
 	Shares tinvest.Dec
 	Gold   tinvest.Dec
-	// Realty — недвижимость: паи ЗПИФ на счетах Финама (см. collectFinam).
+	// Realty — недвижимость: паи ЗПИФ из realtyFunds у любого брокера.
 	Realty tinvest.Dec
 	// Абсолютная доходность за всё время, разбитая по классам активов.
 	// Для реестра: income = StockYield + GoldYield + RealtyYield + дивиденды.
@@ -67,12 +72,14 @@ type Snapshot struct {
 	// золото, облигации и кэш) на сегодня. В базу долей (Total) не входит кэш, а тут
 	// входит всё — это то «всего», что показывает приложение и виджет сводки.
 	PortfolioValue tinvest.Dec
-	// Holdings — акции со счетов Т-Банка; по ним собираются Meta и таблицы
+	// Holdings — акции у всех брокеров; по ним собираются Meta и таблицы
 	// компаний/секторов/дивидендов в Портфель.md.
 	Holdings []Holding
-	// RealtyHoldings — фонды недвижимости. UID у них — символ Финама
-	// (ticker@mic): по нему Meta хранит название фонда.
+	// RealtyHoldings — фонды недвижимости у всех брокеров.
 	RealtyHoldings []Holding
+	// Unclassified — тикеры позиций вне классов (облигации, прочие фонды): они
+	// входят только в PortfolioValue. Список уходит в лог предупреждением.
+	Unclassified []string
 }
 
 // Yield — курсовой доход за всё время по всем классам (без дивидендов и выплат:
@@ -85,53 +92,9 @@ func (s *Snapshot) Yield() tinvest.Dec {
 // InstrumentsService и дивидендная доходность за год. Меняются редко, поэтому
 // обновляются реже среза (см. Cache) и нужны только квартальному срезу долей.
 type Meta struct {
-	Names     map[string]string      // uid → название
-	Sectors   map[string]string      // uid → сектор
+	Names     map[string]string      // тикер → название
+	Sectors   map[string]string      // тикер → сектор
 	Dividends map[string]tinvest.Dec // тикер → дивидендная доходность за год
-}
-
-// collectSnapshot добавляет в срез счета Т-Банка: один GetPortfolio на счёт, без
-// справки по инструментам и дивидендов. Итоги считает finish.
-func collectSnapshot(ctx context.Context, c *tinvest.Client, accounts []tinvest.Account, s *Snapshot) error {
-	for _, a := range accounts {
-		p, err := c.GetPortfolio(ctx, a.ID, "RUB")
-		if err != nil {
-			return err
-		}
-		s.DayChange = s.DayChange.Add(p.DailyYield.Dec())
-		s.PortfolioValue = s.PortfolioValue.Add(p.TotalAmountPortfolio.Dec())
-		for i := range p.Positions {
-			pos := &p.Positions[i]
-			value := pos.Quantity.Dec().Mul(pos.CurrentPrice.Dec())
-			yield := pos.ExpectedYield.Dec()
-			day := pos.DailyYield.Dec()
-			switch {
-			case goldTickers[pos.Ticker]:
-				s.Gold = s.Gold.Add(value)
-				s.GoldYield = s.GoldYield.Add(yield)
-				s.GoldDayChange = s.GoldDayChange.Add(day)
-			case pos.InstrumentType == "share":
-				s.Shares = s.Shares.Add(value)
-				s.StockYield = s.StockYield.Add(yield)
-				s.Holdings = append(s.Holdings, Holding{
-					Ticker:    pos.Ticker,
-					Value:     value,
-					UID:       pos.InstrumentUID,
-					Price:     pos.CurrentPrice.Dec(),
-					Yield:     yield,
-					DayChange: day,
-				})
-			case cashTickers[pos.Ticker]:
-				// Фонды денежного рынка (LQDT) — считаем кэшом.
-				s.Cash = s.Cash.Add(value)
-			case pos.InstrumentType == "currency":
-				// Свободные средства (рубли и прочая валюта в рублёвой оценке);
-				// золото сюда не попадает — оно отсечено выше по тикеру.
-				s.Cash = s.Cash.Add(value)
-			}
-		}
-	}
-	return nil
 }
 
 // finish считает итоги среза, когда все брокеры уже сложены.
@@ -147,9 +110,10 @@ func (s *Snapshot) finish() {
 	sort.Slice(s.RealtyHoldings, byValue(s.RealtyHoldings))
 }
 
-// collectMeta собирает справку по бумагам среза: название, сектор и дивидендную
-// доходность за текущий год. Это дорогая часть — ShareBy и GetDividends на каждую
-// бумагу, — поэтому она вынесена из collectSnapshot и обновляется реже.
+// collectMeta собирает справку по акциям среза: название, сектор и дивидендную
+// доходность за текущий год. Справочник — T-Invest API для любой бумаги
+// Мосбиржи: по UID, если акция лежит в Т-Банке, иначе по тикеру. Это дорогая
+// часть — ShareBy и GetDividends на каждую бумагу, — поэтому обновляется реже.
 func collectMeta(ctx context.Context, c *tinvest.Client, holdings []Holding) (*Meta, error) {
 	m := &Meta{
 		Names:     map[string]string{},
@@ -162,14 +126,14 @@ func collectMeta(ctx context.Context, c *tinvest.Client, holdings []Holding) (*M
 	to := time.Date(year, 12, 31, 23, 59, 59, 0, time.UTC)
 
 	for _, h := range holdings {
-		inst, err := c.ShareByUID(ctx, h.UID)
+		inst, err := shareInfo(ctx, c, &h)
 		if err != nil {
 			return nil, err
 		}
-		m.Names[h.UID] = trimShareSuffix(inst.Name)
-		m.Sectors[h.UID] = inst.Sector
+		m.Names[h.Ticker] = trimShareSuffix(inst.Name)
+		m.Sectors[h.Ticker] = inst.Sector
 
-		divs, err := c.Dividends(ctx, h.UID, from, to)
+		divs, err := c.Dividends(ctx, inst.UID, from, to)
 		if err != nil {
 			slog.WarnContext(ctx, "dividends fetch failed, skipping",
 				slog.String("ticker", h.Ticker), slog.Any("error", err))
@@ -182,6 +146,25 @@ func collectMeta(ctx context.Context, c *tinvest.Client, holdings []Holding) (*M
 		m.Dividends[h.Ticker] = y
 	}
 	return m, nil
+}
+
+// shareInfo — справка по акции: по UID Т-Банка, если он есть, иначе по тикеру.
+func shareInfo(ctx context.Context, c *tinvest.Client, h *Holding) (*tinvest.Instrument, error) {
+	if h.UID != "" {
+		inst, err := c.ShareByUID(ctx, h.UID)
+		if err != nil {
+			return nil, err
+		}
+		if inst.UID == "" {
+			inst.UID = h.UID
+		}
+		return inst, nil
+	}
+	inst, err := c.ShareByTicker(ctx, h.Ticker)
+	if err != nil {
+		return nil, fmt.Errorf("share %s: %w", h.Ticker, err)
+	}
+	return inst, nil
 }
 
 // trimShareSuffix убирает хвост «- акции привилегированные» из названия бумаги
@@ -203,16 +186,4 @@ func (s *Snapshot) ShareBase() tinvest.Dec {
 // ColumnDate — заголовок нового столбца, в формате уже используемом в файле.
 func (s *Snapshot) ColumnDate() string {
 	return s.Date.Format("2006.01.02")
-}
-
-// selectAccounts отбирает все инвестиционные счета (брокерский и ИИС).
-func selectAccounts(all []tinvest.Account) []tinvest.Account {
-	var res []tinvest.Account
-	for _, a := range all {
-		switch a.Type {
-		case "ACCOUNT_TYPE_TINKOFF", "ACCOUNT_TYPE_TINKOFF_IIS":
-			res = append(res, a)
-		}
-	}
-	return res
 }

@@ -38,12 +38,13 @@ func run() error {
 	}
 
 	client := tinvest.NewClient(ctx, cfg.Token)
-	// Финам необязателен: без FINAM_TOKEN в срезе только счета Т-Банка.
-	var fin *finam.Client
+	// Источники портфеля. Т-Банк есть всегда; Финам — если задан FINAM_TOKEN.
+	// Новый брокер — ещё один portfolio.Source в этом списке.
+	sources := []portfolio.Source{portfolio.NewTBankSource(client)}
 	if cfg.FinamToken != "" {
-		fin = finam.NewClient(cfg.FinamToken)
+		sources = append(sources, portfolio.NewFinamSource(finam.NewClient(cfg.FinamToken)))
 	}
-	cache := portfolio.NewCache(portfolio.NewCollector(client, fin))
+	cache := portfolio.NewCache(portfolio.NewCollector(client, sources...))
 
 	var wg sync.WaitGroup
 

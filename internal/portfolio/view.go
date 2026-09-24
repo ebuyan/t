@@ -101,12 +101,9 @@ func buildHoldings(s *Snapshot, m *Meta) []HoldingView {
 	base := s.ShareBase() // доли строк — от акции + золото + недвижимость + кеш
 
 	for _, h := range append(append([]Holding{}, s.Holdings...), s.RealtyHoldings...) {
-		name := ""
-		if m != nil {
-			name = m.Names[h.UID]
-		}
+		ticker, name := HoldingLabel(&h, m)
 		rows = append(rows, holdingRow{h.DayChange, HoldingView{
-			Ticker:         h.Ticker,
+			Ticker:         ticker,
 			Name:           name,
 			Price:          price(h.Price),
 			Value:          money(h.Value),

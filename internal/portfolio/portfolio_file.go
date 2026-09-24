@@ -137,7 +137,7 @@ func companyValues(s *Snapshot, m *Meta) (byTicker, labels map[string]string, or
 	labels = map[string]string{}
 	for _, h := range s.Holdings {
 		byTicker[h.Ticker] = pct(h.Value.Percent(base))
-		labels[h.Ticker] = fmt.Sprintf("%s — %s", h.Ticker, m.Names[h.UID])
+		labels[h.Ticker] = fmt.Sprintf("%s — %s", h.Ticker, m.Names[h.Ticker])
 		order = append(order, h.Ticker)
 	}
 	return byTicker, labels, order
@@ -147,7 +147,7 @@ func companyValues(s *Snapshot, m *Meta) (byTicker, labels map[string]string, or
 func sectorValues(ctx context.Context, s *Snapshot, m *Meta) (map[string]string, []string) {
 	sums := map[string]tinvest.Dec{}
 	for _, h := range s.Holdings {
-		sector := m.Sectors[h.UID]
+		sector := m.Sectors[h.Ticker]
 		name, ok := sectorNames[sector]
 		if !ok {
 			name = sector
@@ -174,7 +174,7 @@ func dividendValues(s *Snapshot, m *Meta) (byTicker, labels map[string]string, o
 	byTicker = map[string]string{}
 	labels = map[string]string{}
 	for _, h := range s.Holdings {
-		labels[h.Ticker] = fmt.Sprintf("%s — %s", h.Ticker, m.Names[h.UID])
+		labels[h.Ticker] = fmt.Sprintf("%s — %s", h.Ticker, m.Names[h.Ticker])
 		d, ok := m.Dividends[h.Ticker]
 		if !ok {
 			continue

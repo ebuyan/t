@@ -29,7 +29,7 @@ func TestBuildYieldView(t *testing.T) {
 			DayChange: tinvest.DecUnits(-2_000),
 		}},
 	}
-	m := &Meta{Names: map[string]string{"uid-sber": "Сбер Банк"}}
+	m := &Meta{Names: map[string]string{"SBER": "Сбер Банк"}}
 
 	v := BuildYieldView(s, m, tinvest.DecUnits(20_000), s.Date)
 
@@ -130,12 +130,12 @@ func TestBuildYieldViewRealty(t *testing.T) {
 		Realty:      tinvest.DecUnits(400_000),
 		RealtyYield: tinvest.DecUnits(-20_000),
 		RealtyHoldings: []Holding{{
-			Ticker: "RU000A1034U7", UID: "RU000A1034U7@MISX",
+			Ticker: "RU000A1034U7", Name: "ЗПИФ Современный 7",
 			Value: tinvest.DecUnits(400_000), Yield: tinvest.DecUnits(-20_000),
 		}},
 	}
 	s.finish()
-	m := &Meta{Names: map[string]string{"RU000A1034U7@MISX": "Акцент 5"}}
+	m := &Meta{}
 
 	v := BuildYieldView(s, m, tinvest.Dec{}, time.Now())
 
@@ -149,9 +149,10 @@ func TestBuildYieldViewRealty(t *testing.T) {
 	}
 	found := false
 	for _, h := range v.Holdings {
-		if h.Ticker == "RU000A1034U7" {
+		// Фонд из справочника подписан коротким именем вместо кода.
+		if h.Ticker == "Современный 7" {
 			found = true
-			if h.Name != "Акцент 5" || h.Share != "40,00%" {
+			if h.Name != "" || h.Share != "40,00%" {
 				t.Errorf("строка фонда = %+v", h)
 			}
 		}
