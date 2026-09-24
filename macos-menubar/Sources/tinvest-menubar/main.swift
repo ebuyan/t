@@ -166,42 +166,49 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             attributes: [.foregroundColor: up ? NSColor.systemGreen : NSColor.systemRed]
         )
 
-        let menu = NSMenu()
-        menu.addItem(info("Стоимость портфеля", rub(t.portfolioValue)))
-        menu.addItem(colored("За сегодня", "\(signedRub(t.dayChange)) (\(signedPct(t.dayChangePct)))", t.dayChange))
         // Доход за всё время = курсовая переоценка + полученные выплаты.
         // Знаменатель — вложенное в акции, золото и недвижимость (стоимость минус
         // курсовой доход): выплаты уже выведены из позиций и лежат в кеше.
         let dividends = t.dividends ?? 0
         let income = t.income + dividends
         let invested = t.total - t.income
-        menu.addItem(colored("Доход за всё время", "\(signedRub(income)) (\(signedPct(pctOf(income, invested))))", income))
-
-        menu.addItem(.separator())
         // База долей — акции + золото + недвижимость + кеш (в сумме 100%).
         // t.total (без кеша) оставляем для доходности выше — кеш дохода не даёт.
         let realtyValue = t.realty?.value ?? 0
         let shareBase = t.shares.value + t.gold.value + realtyValue + t.cash
         // Классы раскрываются подменю со своими бумагами — отдельного «Состава» нет.
         let byClass = Dictionary(grouping: t.holdings, by: { $0.inferredClass })
-        menu.addItem(assetItem("Акции", t.shares, base: shareBase, holdings: byClass["shares"] ?? []))
-        menu.addItem(assetItem("Золото", t.gold, base: shareBase, holdings: byClass["gold"] ?? []))
+
+        // nil в списке — разделитель. Все строки сводки — одна таблица: колонки
+        // значений выровнены через общие табуляции.
+        var rows: [Row?] = [
+            Row(label: "Стоимость портфеля", cols: [rub(t.portfolioValue)]),
+            Row(label: "За сегодня", cols: [signedRub(t.dayChange), signedPct(t.dayChangePct)], sign: t.dayChange),
+            Row(label: "За всё время", cols: [signedRub(income), signedPct(pctOf(income, invested))], sign: income),
+            nil,
+            assetRow("Акции", t.shares, base: shareBase, holdings: byClass["shares"] ?? []),
+            assetRow("Золото", t.gold, base: shareBase, holdings: byClass["gold"] ?? []),
+        ]
         if let realty = t.realty {
-            menu.addItem(assetItem("Недвижимость", realty, base: shareBase, holdings: byClass["realty"] ?? []))
+            rows.append(assetRow("Недвижимость", realty, base: shareBase, holdings: byClass["realty"] ?? []))
         }
         if t.cash != 0 {
-            // Кеш зелёным: доля от той же базы, доходности у кеша нет.
-            menu.addItem(colored("Кеш", "\(rub(t.cash))   \(pct(pctOf(t.cash, shareBase)))", t.cash))
+            // Кеш: доля от той же базы, доходности у кеша нет.
+            rows.append(Row(label: "Кеш", cols: [rub(t.cash), pct(pctOf(t.cash, shareBase))], sign: t.cash))
         }
         if dividends != 0 {
             // Дивиденды — не класс активов, а сумма выплат за всё время (включая
             // выплаты по паям фондов), поэтому без доли: деньги уже лежат в кеше
             // или вложены обратно в бумаги.
-            menu.addItem(colored("Дивиденды", rub(dividends), dividends))
+            rows.append(Row(label: "Дивиденды", cols: [rub(dividends)], sign: dividends))
         }
+        rows.append(nil)
+        rows.append(Row(label: "Обновлено", cols: [shortTime(t.updated)]))
 
-        menu.addItem(.separator())
-        menu.addItem(info("Обновлено", shortTime(t.updated)))
+        let menu = NSMenu()
+        for item in tableItems(rows) {
+            menu.addItem(item)
+        }
         menu.addItem(hideToggleItem())
         menu.addItem(withKey("Обновить сейчас", #selector(refreshNow), "r"))
         menu.addItem(withKey("Выход", #selector(quit), "q"))
@@ -232,28 +239,85 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     // --- Сборка пунктов меню ---
 
-    // assetItem — строка класса активов: стоимость, доля от базы и доходность.
+    // assetRow — строка класса активов: стоимость, доля от базы и доходность.
     // Если у класса есть бумаги, пункт раскрывается подменю с ними.
-    private func assetItem(_ name: String, _ a: Asset, base: Double, holdings: [Holding]) -> NSMenuItem {
-        let line = "\(rub(a.value))   \(pct(pctOf(a.value, base)))   \(signedPct(yieldPct(a.value, a.yield)))"
-        let item = colored(name, line, a.yield)
-        if !holdings.isEmpty {
-            item.submenu = holdingsSubmenu(holdings)
-        }
-        return item
+    private func assetRow(_ name: String, _ a: Asset, base: Double, holdings: [Holding]) -> Row {
+        Row(
+            label: name,
+            cols: [rub(a.value), pct(pctOf(a.value, base)), signedPct(yieldPct(a.value, a.yield))],
+            sign: a.yield,
+            submenu: holdings.isEmpty ? nil : holdingsSubmenu(holdings)
+        )
     }
 
     // holdingsSubmenu — бумаги класса с изменением за сегодня, по убыванию
     // изменения (сверху — сильнее всего выросшие за день).
     private func holdingsSubmenu(_ holdings: [Holding]) -> NSMenu {
         let sub = NSMenu()
-        for h in holdings.sorted(by: { $0.dayChange > $1.dayChange }) {
-            let label = h.name.map { "\(h.ticker) — \($0)" } ?? h.ticker
-            let line = "\(rub(h.value))   \(signedRub(h.dayChange))"
-            sub.addItem(colored(label, line, h.dayChange))
+        let rows: [Row?] = holdings.sorted(by: { $0.dayChange > $1.dayChange }).map { h in
+            Row(
+                label: h.name.map { "\(h.ticker) — \($0)" } ?? h.ticker,
+                cols: [rub(h.value), signedRub(h.dayChange)],
+                sign: h.dayChange
+            )
+        }
+        for item in tableItems(rows) {
+            sub.addItem(item)
         }
         return sub
     }
+
+    // tableItems собирает пункты меню из строк: подпись слева, значения — по
+    // колонкам с правым выравниванием на общих табуляциях (цифры моноширинные,
+    // поэтому разряды встают друг под другом). nil — разделитель.
+    //
+    // У строк есть пустое действие: без него AppKit считает пункт неактивным и
+    // приглушает его, а пункт с подменю — активным. С действием все строки
+    // активные и выглядят одинаково.
+    private func tableItems(_ rows: [Row?]) -> [NSMenuItem] {
+        let present = rows.compactMap { $0 }
+        let labelWidth = present.map { textWidth($0.label, menuFont) }.max() ?? 0
+        let columns = present.map { $0.cols.count }.max() ?? 0
+        var colWidth = [CGFloat](repeating: 0, count: columns)
+        for r in present {
+            for (i, c) in r.cols.enumerated() {
+                colWidth[i] = max(colWidth[i], textWidth(c, valueFont))
+            }
+        }
+
+        var tabs: [NSTextTab] = []
+        var x = labelWidth + labelGap
+        for w in colWidth {
+            x += w
+            tabs.append(NSTextTab(textAlignment: .right, location: x, options: [:]))
+            x += columnGap
+        }
+        let para = NSMutableParagraphStyle()
+        para.tabStops = tabs
+
+        return rows.map { row in
+            guard let r = row else { return .separator() }
+            let item = NSMenuItem(title: ([r.label] + r.cols).joined(separator: " "), action: #selector(noop), keyEquivalent: "")
+            item.target = self
+            let s = NSMutableAttributedString(
+                string: r.label,
+                attributes: [.font: menuFont, .foregroundColor: labelColor, .paragraphStyle: para]
+            )
+            let valueColor = r.sign.map(signColor) ?? labelColor
+            for c in r.cols {
+                s.append(NSAttributedString(
+                    string: "\t" + c,
+                    attributes: [.font: valueFont, .foregroundColor: valueColor, .paragraphStyle: para]
+                ))
+            }
+            item.attributedTitle = s
+            item.submenu = r.submenu
+            return item
+        }
+    }
+
+    // noop — пустое действие для строк сводки (см. tableItems).
+    @objc private func noop() {}
 
     private func placeholderMenu(_ title: String) -> NSMenu {
         let menu = NSMenu()
@@ -262,24 +326,55 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return menu
     }
 
-    // info — «Метка: значение» серой строкой (без действия).
-    private func info(_ label: String, _ value: String) -> NSMenuItem {
-        NSMenuItem(title: "\(label): \(value)", action: nil, keyEquivalent: "")
-    }
-
-    // colored — «Метка: значение», где значение окрашено по знаку sign.
-    private func colored(_ label: String, _ value: String, _ sign: Double) -> NSMenuItem {
-        let item = NSMenuItem(title: "\(label): \(value)", action: nil, keyEquivalent: "")
-        let s = NSMutableAttributedString(string: "\(label): ")
-        let color: NSColor = sign >= 0 ? .systemGreen : .systemRed
-        s.append(NSAttributedString(string: value, attributes: [.foregroundColor: color]))
-        item.attributedTitle = s
-        return item
-    }
-
     private func withKey(_ title: String, _ action: Selector, _ key: String) -> NSMenuItem {
         NSMenuItem(title: title, action: action, keyEquivalent: key)
     }
+}
+
+// Row — строка сводки: подпись и значения по колонкам. sign окрашивает значения
+// по знаку (nil — нейтральные), submenu — раскрывающиеся бумаги класса.
+struct Row {
+    let label: String
+    let cols: [String]
+    var sign: Double?
+    var submenu: NSMenu?
+}
+
+// --- Оформление строк сводки ---
+
+private let menuFont = NSFont.menuFont(ofSize: 0)
+// Цифры моноширинные, чтобы разряды в колонках вставали друг под другом.
+private let valueFont = NSFont.monospacedDigitSystemFont(ofSize: menuFont.pointSize, weight: .regular)
+// Отступ между подписью и первой колонкой и между колонками значений.
+private let labelGap: CGFloat = 24
+private let columnGap: CGFloat = 14
+
+// Подписи и нейтральные значения — обычным цветом текста меню. Зелёный и красный
+// у значений — мягче системных, отдельно для светлой и тёмной темы.
+private let labelColor = NSColor.labelColor
+
+private func softColor(light: UInt32, dark: UInt32) -> NSColor {
+    NSColor(name: nil) { appearance in
+        let isDark = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+        let hex = isDark ? dark : light
+        return NSColor(
+            srgbRed: CGFloat((hex >> 16) & 0xFF) / 255,
+            green: CGFloat((hex >> 8) & 0xFF) / 255,
+            blue: CGFloat(hex & 0xFF) / 255,
+            alpha: 1
+        )
+    }
+}
+
+private let softGreen = softColor(light: 0x3A9D66, dark: 0x6FCF97)
+private let softRed = softColor(light: 0xC8585A, dark: 0xEB8585)
+
+private func signColor(_ sign: Double) -> NSColor {
+    sign >= 0 ? softGreen : softRed
+}
+
+private func textWidth(_ s: String, _ font: NSFont) -> CGFloat {
+    ceil((s as NSString).size(withAttributes: [.font: font]).width)
 }
 
 // --- Форматирование в русском стиле: пробелы-разделители тысяч, запятая, ₽. ---
