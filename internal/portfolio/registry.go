@@ -20,6 +20,7 @@ type registryEntry struct {
 	stock     tinvest.Dec
 	gold      tinvest.Dec
 	dividends tinvest.Dec
+	realty    tinvest.Dec
 }
 
 // newRegistryEntry строит запись из среза и суммы дивидендов, полученных к этой
@@ -29,20 +30,22 @@ func newRegistryEntry(s *Snapshot, dividends tinvest.Dec) registryEntry {
 	stock := s.StockYield.CeilTo(roundStep)
 	gold := s.GoldYield.CeilTo(roundStep)
 	divs := dividends.CeilTo(roundStep)
+	realty := s.RealtyYield.CeilTo(roundStep)
 	return registryEntry{
 		date: s.Date.Format("2006-01-02"),
 		// income считаем от уже округлённых слагаемых, иначе в файле
-		// нарушится инвариант income = stock + gold + dividends.
-		income:    stock.Add(gold).Add(divs),
+		// нарушится инвариант income = stock + gold + dividends + realty.
+		income:    stock.Add(gold).Add(divs).Add(realty),
 		stock:     stock,
 		gold:      gold,
 		dividends: divs,
+		realty:    realty,
 	}
 }
 
 // render печатает поля в фиксированном порядке: dataviewjs в волте разбирает
-// блок текстом по номерам строк (date→income→stock→gold), поэтому dividends
-// приписаны последними — иначе сломаются графики.
+// блок текстом по номерам строк (date→income→stock→gold), поэтому новые поля
+// (dividends, затем realty) приписаны в конец — иначе сломаются графики.
 func (e registryEntry) render() []string {
 	return []string{
 		"- date:: " + e.date,
@@ -50,6 +53,7 @@ func (e registryEntry) render() []string {
 		"  stock:: " + e.stock.String(0),
 		"  gold:: " + e.gold.String(0),
 		"  dividends:: " + e.dividends.String(0),
+		"  realty:: " + e.realty.String(0),
 	}
 }
 
@@ -76,6 +80,7 @@ func UpdateRegistryFile(ctx context.Context, path string, s *Snapshot, dividends
 		slog.String("stock", entry.stock.String(0)),
 		slog.String("gold", entry.gold.String(0)),
 		slog.String("dividends", entry.dividends.String(0)),
+		slog.String("realty", entry.realty.String(0)),
 	)
 
 	return writeAtomic(path, []byte(updated))

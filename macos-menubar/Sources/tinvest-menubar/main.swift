@@ -16,6 +16,9 @@ struct Asset: Decodable {
 }
 
 struct Holding: Decodable {
+    // assetClass — класс строки: shares | gold | realty. Опционально: старая
+    // сборка сервиса поля не отдаёт, тогда класс угадываем по тикеру (inferredClass).
+    let assetClass: String?
     let ticker: String
     let name: String?
     let value: Double
@@ -23,7 +26,15 @@ struct Holding: Decodable {
 
     enum CodingKeys: String, CodingKey {
         case ticker, name, value
+        case assetClass = "class"
         case dayChange = "day_change"
+    }
+
+    // inferredClass — класс строки; для ответа без поля class золото узнаём по
+    // тикеру GLDRUB_*, остальное — акции (недвижимости старая сборка не знает).
+    var inferredClass: String {
+        if let c = assetClass { return c }
+        return ticker.hasPrefix("GLDRUB") ? "gold" : "shares"
     }
 }
 
@@ -39,13 +50,16 @@ struct Today: Decodable {
     let dividends: Double?
     let shares: Asset
     let gold: Asset
+    // realty — недвижимость (паи ЗПИФ на Финаме). Опционально: старая сборка
+    // сервиса поля не отдаёт — тогда пункта нет.
+    let realty: Asset?
     let cash: Double
     let holdings: [Holding]
     let updated: String
 
     enum CodingKeys: String, CodingKey {
         case portfolioValue = "portfolio_value"
-        case total, income, dividends, shares, gold, cash, holdings, updated
+        case total, income, dividends, shares, gold, realty, cash, holdings, updated
         case dayChange = "day_change"
         case dayChangePct = "day_change_pct"
     }
@@ -155,33 +169,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let menu = NSMenu()
         menu.addItem(info("Стоимость портфеля", rub(t.portfolioValue)))
         menu.addItem(colored("За сегодня", "\(signedRub(t.dayChange)) (\(signedPct(t.dayChangePct)))", t.dayChange))
-        // Доход за всё время = курсовая переоценка + полученные дивиденды.
-        // Знаменатель — вложенное в акции и золото (стоимость минус курсовой
-        // доход): дивиденды уже выведены из позиций и лежат в кеше.
+        // Доход за всё время = курсовая переоценка + полученные выплаты.
+        // Знаменатель — вложенное в акции, золото и недвижимость (стоимость минус
+        // курсовой доход): выплаты уже выведены из позиций и лежат в кеше.
         let dividends = t.dividends ?? 0
         let income = t.income + dividends
         let invested = t.total - t.income
         menu.addItem(colored("Доход за всё время", "\(signedRub(income)) (\(signedPct(pctOf(income, invested))))", income))
 
         menu.addItem(.separator())
-        // База долей — акции + золото + кеш (в сумме 100%). t.total (акции +
-        // золото) оставляем для доходности выше — кеш дохода не даёт.
-        let shareBase = t.shares.value + t.gold.value + t.cash
-        menu.addItem(assetItem("Акции", t.shares, base: shareBase))
-        menu.addItem(assetItem("Золото", t.gold, base: shareBase))
+        // База долей — акции + золото + недвижимость + кеш (в сумме 100%).
+        // t.total (без кеша) оставляем для доходности выше — кеш дохода не даёт.
+        let realtyValue = t.realty?.value ?? 0
+        let shareBase = t.shares.value + t.gold.value + realtyValue + t.cash
+        // Классы раскрываются подменю со своими бумагами — отдельного «Состава» нет.
+        let byClass = Dictionary(grouping: t.holdings, by: { $0.inferredClass })
+        menu.addItem(assetItem("Акции", t.shares, base: shareBase, holdings: byClass["shares"] ?? []))
+        menu.addItem(assetItem("Золото", t.gold, base: shareBase, holdings: byClass["gold"] ?? []))
+        if let realty = t.realty {
+            menu.addItem(assetItem("Недвижимость", realty, base: shareBase, holdings: byClass["realty"] ?? []))
+        }
         if t.cash != 0 {
             // Кеш зелёным: доля от той же базы, доходности у кеша нет.
             menu.addItem(colored("Кеш", "\(rub(t.cash))   \(pct(pctOf(t.cash, shareBase)))", t.cash))
         }
         if dividends != 0 {
-            // Дивиденды — не класс активов, а сумма выплат за всё время, поэтому
-            // без доли: деньги уже лежат в кеше или вложены обратно в бумаги.
+            // Дивиденды — не класс активов, а сумма выплат за всё время (включая
+            // выплаты по паям фондов), поэтому без доли: деньги уже лежат в кеше
+            // или вложены обратно в бумаги.
             menu.addItem(colored("Дивиденды", rub(dividends), dividends))
-        }
-
-        if !t.holdings.isEmpty {
-            menu.addItem(.separator())
-            menu.addItem(holdingsSubmenu(t.holdings))
         }
 
         menu.addItem(.separator())
@@ -217,23 +233,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // --- Сборка пунктов меню ---
 
     // assetItem — строка класса активов: стоимость, доля от базы и доходность.
-    private func assetItem(_ name: String, _ a: Asset, base: Double) -> NSMenuItem {
+    // Если у класса есть бумаги, пункт раскрывается подменю с ними.
+    private func assetItem(_ name: String, _ a: Asset, base: Double, holdings: [Holding]) -> NSMenuItem {
         let line = "\(rub(a.value))   \(pct(pctOf(a.value, base)))   \(signedPct(yieldPct(a.value, a.yield)))"
-        return colored(name, line, a.yield)
+        let item = colored(name, line, a.yield)
+        if !holdings.isEmpty {
+            item.submenu = holdingsSubmenu(holdings)
+        }
+        return item
     }
 
-    // holdingsSubmenu — подменю «Состав»: бумаги с изменением за сегодня,
-    // по убыванию изменения (сверху — сильнее всего выросшие за день).
-    private func holdingsSubmenu(_ holdings: [Holding]) -> NSMenuItem {
-        let root = NSMenuItem(title: "Состав (\(holdings.count))", action: nil, keyEquivalent: "")
+    // holdingsSubmenu — бумаги класса с изменением за сегодня, по убыванию
+    // изменения (сверху — сильнее всего выросшие за день).
+    private func holdingsSubmenu(_ holdings: [Holding]) -> NSMenu {
         let sub = NSMenu()
         for h in holdings.sorted(by: { $0.dayChange > $1.dayChange }) {
             let label = h.name.map { "\(h.ticker) — \($0)" } ?? h.ticker
             let line = "\(rub(h.value))   \(signedRub(h.dayChange))"
             sub.addItem(colored(label, line, h.dayChange))
         }
-        root.submenu = sub
-        return root
+        return sub
     }
 
     private func placeholderMenu(_ title: String) -> NSMenu {

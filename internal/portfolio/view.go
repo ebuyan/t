@@ -24,6 +24,7 @@ type YieldView struct {
 	DayChangePos bool
 	Shares       AssetView
 	Gold         AssetView
+	Realty       AssetView
 	Holdings     []HoldingView
 	// CanSync — показывать ли кнопку записи текущих значений в реестр. Ставится
 	// сервером: доступно, только если реестр сконфигурирован.
@@ -36,7 +37,7 @@ type YieldView struct {
 type AssetView struct {
 	Name     string
 	Value    string
-	Share    string // доля от базы (акции + золото + кеш)
+	Share    string // доля от базы (акции + золото + недвижимость + кеш)
 	Yield    string // абсолютный доход
 	YieldPct string // относительная доходность
 	Positive bool
@@ -59,15 +60,16 @@ type HoldingView struct {
 // dividends — полученные за всё время выплаты; в доходность позиций они не входят,
 // поэтому прибавляются к доходу отдельно.
 func BuildYieldView(s *Snapshot, m *Meta, dividends tinvest.Dec, updated time.Time) YieldView {
-	yield := s.StockYield.Add(s.GoldYield) // переоценка позиций, без выплат
+	yield := s.Yield() // переоценка позиций, без выплат
 	income := yield.Add(dividends)
-	base := s.ShareBase() // доли считаем от акции + золото + кеш
+	base := s.ShareBase() // доли считаем от акции + золото + недвижимость + кеш
 
 	v := YieldView{
 		Updated: updated.Format("2006-01-02 15:04:05 MST"),
 		Total:   money(s.PortfolioValue),
 		Income:  signedMoney(income),
-		// Доходность — к вложенному в акции + золото (кеш дохода не даёт).
+		// Доходность — к вложенному в акции + золото + недвижимость (кеш дохода
+		// не даёт).
 		// Дивиденды уже выведены из позиций, поэтому знаменатель считаем от
 		// переоценки, а не от полного дохода.
 		IncomePct:    signedPct(income.Percent(s.Total.Sub(yield))),
@@ -79,6 +81,7 @@ func BuildYieldView(s *Snapshot, m *Meta, dividends tinvest.Dec, updated time.Ti
 		DayChangePos: s.DayChange.Sign() >= 0,
 		Shares:       buildAsset("Акции", s.Shares, s.StockYield, base),
 		Gold:         buildAsset("Золото", s.Gold, s.GoldYield, base),
+		Realty:       buildAsset("Недвижимость", s.Realty, s.RealtyYield, base),
 	}
 	v.Holdings = buildHoldings(s, m)
 	return v
@@ -91,13 +94,13 @@ type holdingRow struct {
 	view      HoldingView
 }
 
-// buildHoldings собирает таблицу состава: бумаги, золото и кеш одной таблицей,
-// отсортированные по убыванию изменения за сегодня.
+// buildHoldings собирает таблицу состава: бумаги, фонды недвижимости, золото и
+// кеш одной таблицей, отсортированные по убыванию изменения за сегодня.
 func buildHoldings(s *Snapshot, m *Meta) []HoldingView {
-	rows := make([]holdingRow, 0, len(s.Holdings)+2)
-	base := s.ShareBase() // доли строк — от акции + золото + кеш
+	rows := make([]holdingRow, 0, len(s.Holdings)+len(s.RealtyHoldings)+2)
+	base := s.ShareBase() // доли строк — от акции + золото + недвижимость + кеш
 
-	for _, h := range s.Holdings {
+	for _, h := range append(append([]Holding{}, s.Holdings...), s.RealtyHoldings...) {
 		name := ""
 		if m != nil {
 			name = m.Names[h.UID]

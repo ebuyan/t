@@ -108,6 +108,31 @@ func (t *table) rowIndex(key string) int {
 	return -1
 }
 
+// insertRows добавляет строки для ключей из order, которых ещё нет в таблице, —
+// перед ближайшей следующей по order существующей строкой (или в конец). Прошлые
+// столбцы новой строки заполняются missing.
+func (t *table) insertRows(order []string, missing string) {
+	for k, key := range order {
+		if t.rowIndex(key) >= 0 {
+			continue
+		}
+		row := make([]string, len(t.header))
+		row[0] = key
+		for i := 1; i < len(row); i++ {
+			row[i] = missing
+		}
+
+		at := len(t.rows)
+		for _, next := range order[k+1:] {
+			if i := t.rowIndex(next); i >= 0 {
+				at = i
+				break
+			}
+		}
+		t.rows = append(t.rows[:at], append([][]string{row}, t.rows[at:]...)...)
+	}
+}
+
 // setColumn проставляет значения в столбец header, создавая его при отсутствии.
 // values — по ключу первого столбца; строки без значения получают missing.
 // Новые ключи из order, которых ещё нет в таблице, дописываются в конец.

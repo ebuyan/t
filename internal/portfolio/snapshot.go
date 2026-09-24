@@ -20,8 +20,8 @@ var goldTickers = map[string]bool{
 
 // cashTickers — фонды денежного рынка (БПИФ ликвидности). API отдаёт их как
 // instrumentType "etf", отдельного класса активов под фонды нет; по смыслу это
-// припаркованные деньги, поэтому считаем их кэшом — идут в строку состава «Кеш»,
-// но не в базу долей (акции + золото).
+// припаркованные деньги, поэтому считаем их кэшом — идут в строку «Кеш», а в
+// знаменатель доходности (Total) не входят.
 var cashTickers = map[string]bool{
 	"LQDT": true,
 }
@@ -42,15 +42,18 @@ type Holding struct {
 // веб-страницей и реестром доходности.
 type Snapshot struct {
 	Date time.Time
-	// Total — база для долей: акции + золото. Рублёвый кэш игнорируется,
-	// поэтому доли «Акции» и «Золото» в сумме дают ровно 100%.
+	// Total — вложенное в доходные активы: акции + золото + недвижимость. Кеш дохода
+	// не даёт и сюда не входит; это знаменатель доходности (Total − Yield()).
 	Total  tinvest.Dec
 	Shares tinvest.Dec
 	Gold   tinvest.Dec
+	// Realty — недвижимость: паи ЗПИФ на счетах Финама (см. collectFinam).
+	Realty tinvest.Dec
 	// Абсолютная доходность за всё время, разбитая по классам активов.
-	// Для реестра: income = StockYield + GoldYield.
-	StockYield tinvest.Dec
-	GoldYield  tinvest.Dec
+	// Для реестра: income = StockYield + GoldYield + RealtyYield + дивиденды.
+	StockYield  tinvest.Dec
+	GoldYield   tinvest.Dec
+	RealtyYield tinvest.Dec
 	// GoldDayChange — изменение по золоту за сегодня (для строки золота в составе).
 	GoldDayChange tinvest.Dec
 	// Cash — свободные средства (валютные позиции кроме золота, в рублях). Растёт,
@@ -64,7 +67,18 @@ type Snapshot struct {
 	// золото, облигации и кэш) на сегодня. В базу долей (Total) не входит кэш, а тут
 	// входит всё — это то «всего», что показывает приложение и виджет сводки.
 	PortfolioValue tinvest.Dec
-	Holdings       []Holding
+	// Holdings — акции со счетов Т-Банка; по ним собираются Meta и таблицы
+	// компаний/секторов/дивидендов в Портфель.md.
+	Holdings []Holding
+	// RealtyHoldings — фонды недвижимости. UID у них — символ Финама
+	// (ticker@mic): по нему Meta хранит название фонда.
+	RealtyHoldings []Holding
+}
+
+// Yield — курсовой доход за всё время по всем классам (без дивидендов и выплат:
+// те приходят деньгами и в переоценку позиций не попадают).
+func (s *Snapshot) Yield() tinvest.Dec {
+	return s.StockYield.Add(s.GoldYield).Add(s.RealtyYield)
 }
 
 // Meta — тяжёлые справочные данные по инструментам среза: названия и секторы из
@@ -76,22 +90,16 @@ type Meta struct {
 	Dividends map[string]tinvest.Dec // тикер → дивидендная доходность за год
 }
 
-// collectSnapshot собирает лёгкий срез по всем указанным счетам: один GetPortfolio
-// на счёт, без справки по инструментам и дивидендов.
-func collectSnapshot(ctx context.Context, c *tinvest.Client, accounts []tinvest.Account, now time.Time) (*Snapshot, error) {
-	s := &Snapshot{Date: now}
-
-	// portfolioValue — стоимость всего портфеля (включая кэш и облигации) на сегодня;
-	// нужна как знаменатель для относительного изменения за день.
-	var portfolioValue tinvest.Dec
-
+// collectSnapshot добавляет в срез счета Т-Банка: один GetPortfolio на счёт, без
+// справки по инструментам и дивидендов. Итоги считает finish.
+func collectSnapshot(ctx context.Context, c *tinvest.Client, accounts []tinvest.Account, s *Snapshot) error {
 	for _, a := range accounts {
 		p, err := c.GetPortfolio(ctx, a.ID, "RUB")
 		if err != nil {
-			return nil, err
+			return err
 		}
 		s.DayChange = s.DayChange.Add(p.DailyYield.Dec())
-		portfolioValue = portfolioValue.Add(p.TotalAmountPortfolio.Dec())
+		s.PortfolioValue = s.PortfolioValue.Add(p.TotalAmountPortfolio.Dec())
 		for i := range p.Positions {
 			pos := &p.Positions[i]
 			value := pos.Quantity.Dec().Mul(pos.CurrentPrice.Dec())
@@ -121,19 +129,22 @@ func collectSnapshot(ctx context.Context, c *tinvest.Client, accounts []tinvest.
 				// золото сюда не попадает — оно отсечено выше по тикеру.
 				s.Cash = s.Cash.Add(value)
 			}
-			// В базу долей (акции + золото) входят только акции и золото — так
-			// считает файл; кеш учитываем отдельной строкой состава.
 		}
 	}
-	s.Total = s.Shares.Add(s.Gold)
-	s.PortfolioValue = portfolioValue
-	// Относительное изменение — к вчерашней стоимости портфеля (сегодня − изменение).
-	s.DayChangePct = s.DayChange.Percent(portfolioValue.Sub(s.DayChange))
+	return nil
+}
 
-	sort.Slice(s.Holdings, func(i, j int) bool {
-		return s.Holdings[i].Value.Cmp(s.Holdings[j].Value) > 0
-	})
-	return s, nil
+// finish считает итоги среза, когда все брокеры уже сложены.
+func (s *Snapshot) finish() {
+	s.Total = s.Shares.Add(s.Gold).Add(s.Realty)
+	// Относительное изменение — к вчерашней стоимости портфеля (сегодня − изменение).
+	s.DayChangePct = s.DayChange.Percent(s.PortfolioValue.Sub(s.DayChange))
+
+	byValue := func(h []Holding) func(i, j int) bool {
+		return func(i, j int) bool { return h[i].Value.Cmp(h[j].Value) > 0 }
+	}
+	sort.Slice(s.Holdings, byValue(s.Holdings))
+	sort.Slice(s.RealtyHoldings, byValue(s.RealtyHoldings))
 }
 
 // collectMeta собирает справку по бумагам среза: название, сектор и дивидендную
@@ -182,11 +193,11 @@ func trimShareSuffix(name string) string {
 	return trimmed
 }
 
-// ShareBase — база для долей на странице и в виджете меню-бара: акции + золото +
-// кеш. В сумме доли Акции/Золото/Кеш дают ровно 100%. Квартальный Портфель.md
-// использует свою историческую базу (акции + золото, s.Total) — см. assetValues.
+// ShareBase — база для долей на странице, в виджете меню-бара и в таблице «Актив»
+// Портфель.md: акции + золото + недвижимость + кеш. В сумме доли классов дают
+// ровно 100%.
 func (s *Snapshot) ShareBase() tinvest.Dec {
-	return s.Shares.Add(s.Gold).Add(s.Cash)
+	return s.Shares.Add(s.Gold).Add(s.Realty).Add(s.Cash)
 }
 
 // ColumnDate — заголовок нового столбца, в формате уже используемом в файле.

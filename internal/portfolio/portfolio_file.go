@@ -76,6 +76,9 @@ func applySnapshot(ctx context.Context, content string, s *Snapshot, m *Meta) (s
 		switch t.name() {
 		case tableAssets:
 			values, order := assetValues(s)
+			// Новый класс (Недвижимость) встаёт на своё место по порядку, а не
+			// в конец таблицы под «Всего».
+			t.insertRows(order, missing)
 			t.setColumn(col, values, order, missing)
 			touched = append(touched, tableAssets)
 
@@ -112,17 +115,18 @@ func applySnapshot(ctx context.Context, content string, s *Snapshot, m *Meta) (s
 
 // --- Значения столбцов из среза и метаданных ---
 
-// assetValues — строки таблицы «Актив». База долей — акции + золото + кеш
-// (ShareBase), поэтому Акции/Золото/Кеш в сумме дают 100%; «Всего» — эта же база
-// в рублях (полная стоимость трёх классов).
+// assetValues — строки таблицы «Актив». База долей — акции + золото +
+// недвижимость + кеш (ShareBase), поэтому классы в сумме дают 100%; «Всего» — эта
+// же база в рублях.
 func assetValues(s *Snapshot) (map[string]string, []string) {
 	base := s.ShareBase()
 	return map[string]string{
-		"Акции":     pct(s.Shares.Percent(base)),
-		"Золото":    pct(s.Gold.Percent(base)),
-		"Кеш":       pct(s.Cash.Percent(base)),
-		"**Всего**": rub(base),
-	}, []string{"Акции", "Золото", "Кеш", "**Всего**"}
+		"Акции":        pct(s.Shares.Percent(base)),
+		"Золото":       pct(s.Gold.Percent(base)),
+		"Недвижимость": pct(s.Realty.Percent(base)),
+		"Кеш":          pct(s.Cash.Percent(base)),
+		"**Всего**":    rub(base),
+	}, []string{"Акции", "Золото", "Недвижимость", "Кеш", "**Всего**"}
 }
 
 // companyValues — доли компаний от общей базы (акции + золото + кеш, как в таблице

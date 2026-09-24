@@ -104,9 +104,18 @@ type assetJSON struct {
 	Yield json.Number `json:"yield"`
 }
 
-// holdingJSON — одна бумага в составе: тикер, название (если известно), стоимость
-// и изменение за сегодня (в рублях).
+// Классы активов строк состава: по ним виджет раскладывает строки в подменю
+// пунктов «Акции», «Золото», «Недвижимость».
+const (
+	classShares = "shares"
+	classGold   = "gold"
+	classRealty = "realty"
+)
+
+// holdingJSON — одна бумага в составе: класс, тикер, название (если известно),
+// стоимость и изменение за сегодня (в рублях).
 type holdingJSON struct {
+	Class     string      `json:"class"`
 	Ticker    string      `json:"ticker"`
 	Name      string      `json:"name,omitempty"`
 	Value     json.Number `json:"value"`
@@ -117,17 +126,20 @@ type holdingJSON struct {
 // day_change_pct — в процентах. Проценты долей и доходности виджет считает сам.
 type todayResponse struct {
 	PortfolioValue json.Number `json:"portfolio_value"` // полная стоимость (с кэшем и облигациями)
-	Total          json.Number `json:"total"`           // база долей: акции + золото
+	Total          json.Number `json:"total"`           // вложенное в доходные активы: акции + золото + недвижимость
 	DayChange      json.Number `json:"day_change"`
 	DayChangePct   json.Number `json:"day_change_pct"`
-	// Income — курсовая доходность за всё время (акции + золото). Дивиденды в неё
-	// не входят: они приходят деньгами и в expectedYield позиций не попадают.
+	// Income — курсовая доходность за всё время (акции + золото + недвижимость).
+	// Дивиденды и выплаты в неё не входят: они приходят деньгами и в переоценку
+	// позиций не попадают.
 	Income json.Number `json:"income"`
-	// Dividends — полученные за всё время дивиденды (за вычетом налога). Полный
-	// доход за всё время = income + dividends; считает потребитель.
+	// Dividends — полученные за всё время выплаты за вычетом налога: дивиденды,
+	// купоны и выплаты по паям фондов. Полный доход = income + dividends; считает
+	// потребитель.
 	Dividends json.Number   `json:"dividends"`
 	Shares    assetJSON     `json:"shares"`
 	Gold      assetJSON     `json:"gold"`
+	Realty    assetJSON     `json:"realty"`
 	Cash      json.Number   `json:"cash"`
 	Holdings  []holdingJSON `json:"holdings"`
 	Updated   string        `json:"updated"`
@@ -158,29 +170,36 @@ func handleAPIToday(cfg Config) http.HandlerFunc {
 			Total:          num(s.Total),
 			DayChange:      num(s.DayChange),
 			DayChangePct:   num(s.DayChangePct),
-			Income:         num(s.StockYield.Add(s.GoldYield)),
+			Income:         num(s.Yield()),
 			Dividends:      num(divs),
 			Shares:         assetJSON{Value: num(s.Shares), Yield: num(s.StockYield)},
 			Gold:           assetJSON{Value: num(s.Gold), Yield: num(s.GoldYield)},
+			Realty:         assetJSON{Value: num(s.Realty), Yield: num(s.RealtyYield)},
 			Cash:           num(s.Cash),
-			Holdings:       make([]holdingJSON, 0, len(s.Holdings)),
+			Holdings:       make([]holdingJSON, 0, len(s.Holdings)+len(s.RealtyHoldings)+1),
 			Updated:        updated.Format(time.RFC3339),
 		}
-		for _, h := range s.Holdings {
-			name := ""
-			if m != nil {
-				name = m.Names[h.UID]
+		add := func(class string, hs []portfolio.Holding) {
+			for _, h := range hs {
+				name := ""
+				if m != nil {
+					name = m.Names[h.UID]
+				}
+				resp.Holdings = append(resp.Holdings, holdingJSON{
+					Class:     class,
+					Ticker:    h.Ticker,
+					Name:      name,
+					Value:     num(h.Value),
+					DayChange: num(h.DayChange),
+				})
 			}
-			resp.Holdings = append(resp.Holdings, holdingJSON{
-				Ticker:    h.Ticker,
-				Name:      name,
-				Value:     num(h.Value),
-				DayChange: num(h.DayChange),
-			})
 		}
+		add(classShares, s.Holdings)
+		add(classRealty, s.RealtyHoldings)
 		// Золото — отдельной строкой состава, как в таблице на странице.
 		if !s.Gold.IsZero() {
 			resp.Holdings = append(resp.Holdings, holdingJSON{
+				Class:     classGold,
 				Ticker:    "GLDRUB_TOM",
 				Name:      "Золото",
 				Value:     num(s.Gold),

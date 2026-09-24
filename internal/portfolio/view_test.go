@@ -120,3 +120,43 @@ func TestBuildYieldViewNilMeta(t *testing.T) {
 		t.Errorf("без meta имя должно быть пустым, получили %q", v.Holdings[0].Name)
 	}
 }
+
+// Недвижимость — своя карточка, фонды — строки состава; доходность считается к
+// вложенному в акции + золото + недвижимость.
+func TestBuildYieldViewRealty(t *testing.T) {
+	s := &Snapshot{
+		Shares:      tinvest.DecUnits(600_000),
+		StockYield:  tinvest.DecUnits(100_000),
+		Realty:      tinvest.DecUnits(400_000),
+		RealtyYield: tinvest.DecUnits(-20_000),
+		RealtyHoldings: []Holding{{
+			Ticker: "RU000A1034U7", UID: "RU000A1034U7@MISX",
+			Value: tinvest.DecUnits(400_000), Yield: tinvest.DecUnits(-20_000),
+		}},
+	}
+	s.finish()
+	m := &Meta{Names: map[string]string{"RU000A1034U7@MISX": "Акцент 5"}}
+
+	v := BuildYieldView(s, m, tinvest.Dec{}, time.Now())
+
+	// База долей 1М: недвижимость 40%; доходность −20 000 к вложенным 420 000.
+	if v.Realty.Name != "Недвижимость" || v.Realty.Share != "40,00%" || v.Realty.YieldPct != "-4,76%" {
+		t.Errorf("карточка недвижимости = %+v", v.Realty)
+	}
+	// Доход +80 000 к вложенным 920 000 (1М − 80 000 переоценки).
+	if v.IncomePct != "+8,70%" {
+		t.Errorf("IncomePct = %q, ожидалось +8,70%%", v.IncomePct)
+	}
+	found := false
+	for _, h := range v.Holdings {
+		if h.Ticker == "RU000A1034U7" {
+			found = true
+			if h.Name != "Акцент 5" || h.Share != "40,00%" {
+				t.Errorf("строка фонда = %+v", h)
+			}
+		}
+	}
+	if !found {
+		t.Error("фонда нет в составе")
+	}
+}

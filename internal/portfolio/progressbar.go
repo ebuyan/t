@@ -41,8 +41,8 @@ func barSource(name string, s *Snapshot) (tinvest.Dec, bool) {
 		// в s.Cash в collectSnapshot.
 		return s.Cash, true
 	case "reits":
-		// Отдельного класса недвижимости в портфеле пока нет — прогресс 0%.
-		return tinvest.Dec{}, true
+		// Недвижимость — паи ЗПИФ на счетах Финама (s.Realty).
+		return s.Realty, true
 	}
 	return tinvest.Dec{}, false
 }

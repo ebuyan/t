@@ -58,12 +58,14 @@ const testDoc = "" +
 	"```\n" +
 	"\nТекст под барами не трогаем.\n"
 
-// snap — 4.7М всего, 3.75М акции, 0.75М золото, 0.2М кэш (рубли + LQDT).
+// snap — 4.7М всего, 3.75М акции, 0.75М золото, 0.3М недвижимость, 0.2М кэш
+// (рубли + LQDT).
 func testSnap() *Snapshot {
 	return &Snapshot{
 		PortfolioValue: tinvest.DecUnits(4_700_000),
 		Shares:         tinvest.DecUnits(3_750_000),
 		Gold:           tinvest.DecUnits(750_000),
+		Realty:         tinvest.DecUnits(300_000),
 		Cash:           tinvest.DecUnits(200_000),
 	}
 }
@@ -76,13 +78,13 @@ func TestApplyProgressBars(t *testing.T) {
 	}
 
 	// value = накоплено ÷ (goal×1000) × 100. goal человек не трогаем.
-	// Total: 4.7М/10М=47, Gold: 0.75М/1.5М=50, Stoc: 3.75М/7.5М=50, Reits: 0,
-	// Cash: 0.2М/0.5М=40.
+	// Total: 4.7М/10М=47, Gold: 0.75М/1.5М=50, Stoc: 3.75М/7.5М=50,
+	// Reits: 0.3М/1М=30, Cash: 0.2М/0.5М=40.
 	for _, want := range []string{
 		"name: Total\ngoal: 10000\nmax: 100\nvalue: 47\n",
 		"name: Gold\ngoal: 1500\nmax: 100\nvalue: 50\n",
 		"name: Stoc\ngoal: 7500\nmax: 100\nvalue: 50\n",
-		"name: Reits\ngoal: 1000\nmax: 100\nvalue: 0\n",
+		"name: Reits\ngoal: 1000\nmax: 100\nvalue: 30\n",
 		"name: Cash\ngoal: 500\nmax: 100\nvalue: 40\n",
 	} {
 		if !strings.Contains(out, want) {

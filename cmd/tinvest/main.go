@@ -12,6 +12,7 @@ import (
 	_ "time/tzdata"
 
 	"tinvest/internal/config"
+	"tinvest/internal/finam"
 	"tinvest/internal/portfolio"
 	"tinvest/internal/server"
 	"tinvest/internal/tinvest"
@@ -37,7 +38,12 @@ func run() error {
 	}
 
 	client := tinvest.NewClient(ctx, cfg.Token)
-	cache := portfolio.NewCache(portfolio.NewCollector(client))
+	// Финам необязателен: без FINAM_TOKEN в срезе только счета Т-Банка.
+	var fin *finam.Client
+	if cfg.FinamToken != "" {
+		fin = finam.NewClient(cfg.FinamToken)
+	}
+	cache := portfolio.NewCache(portfolio.NewCollector(client, fin))
 
 	var wg sync.WaitGroup
 
@@ -165,6 +171,7 @@ func startPortfolioSchedule(ctx context.Context, c *portfolio.Cache, schCfg, fil
 			slog.String("date", s.ColumnDate()),
 			slog.String("shares", s.Shares.String(2)),
 			slog.String("gold", s.Gold.String(2)),
+			slog.String("realty", s.Realty.String(2)),
 			slog.String("total", s.Total.String(2)),
 		)
 

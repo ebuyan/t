@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"tinvest/internal/finam"
 	"tinvest/internal/tinvest"
 )
 
@@ -20,16 +21,22 @@ const (
 	dividendsTTL = time.Hour
 )
 
-// Collector ходит в T-Invest API за срезом и метаданными по инвестиционным счетам.
+// Collector ходит в T-Invest API и, если задан, в Finam Trade API за срезом и
+// метаданными по инвестиционным счетам.
 type Collector struct {
 	client *tinvest.Client
+	// finam — счета Финама (недвижимость); nil, если токен Финама не задан.
+	finam *finam.Client
 }
 
-func NewCollector(client *tinvest.Client) *Collector {
-	return &Collector{client: client}
+// NewCollector создаёт сборщик. fin может быть nil — тогда в срезе только Т-Банк.
+func NewCollector(client *tinvest.Client, fin *finam.Client) *Collector {
+	return &Collector{client: client, finam: fin}
 }
 
-// Snapshot собирает лёгкий срез: GetAccounts + GetPortfolio по счетам.
+// Snapshot собирает лёгкий срез: GetPortfolio по счетам Т-Банка и GetAccount по
+// счетам Финама. Ошибка любого брокера — ошибка всего среза: неполный срез
+// испортил бы доли и реестр, а кеш тем временем отдаёт прошлый целый.
 func (c *Collector) Snapshot(ctx context.Context) (*Snapshot, error) {
 	ctx, cancel := context.WithTimeout(ctx, time.Minute)
 	defer cancel()
@@ -38,11 +45,22 @@ func (c *Collector) Snapshot(ctx context.Context) (*Snapshot, error) {
 	if err != nil {
 		return nil, err
 	}
-	return collectSnapshot(ctx, c.client, targets, time.Now())
+	s := &Snapshot{Date: time.Now()}
+	if err := collectSnapshot(ctx, c.client, targets, s); err != nil {
+		return nil, err
+	}
+	if c.finam != nil {
+		if err := collectFinam(ctx, c.finam, s); err != nil {
+			return nil, fmt.Errorf("finam: %w", err)
+		}
+	}
+	s.finish()
+	return s, nil
 }
 
-// Dividends собирает полученные за всё время дивиденды по всем счетам
-// (GetOperationsByCursor с начала истории, поэтому отдельно от среза).
+// Dividends собирает полученные за всё время выплаты по всем счетам: дивиденды
+// Т-Банка (GetOperationsByCursor с начала истории) и выплаты по бумагам и паям на
+// Финаме. Долгая история, поэтому отдельно от среза.
 func (c *Collector) Dividends(ctx context.Context) (tinvest.Dec, error) {
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
@@ -51,7 +69,19 @@ func (c *Collector) Dividends(ctx context.Context) (tinvest.Dec, error) {
 	if err != nil {
 		return tinvest.Dec{}, err
 	}
-	return collectDividends(ctx, c.client, targets, time.Now())
+	now := time.Now()
+	total, err := collectDividends(ctx, c.client, targets, now)
+	if err != nil {
+		return tinvest.Dec{}, err
+	}
+	if c.finam != nil {
+		fin, err := collectFinamPayouts(ctx, c.finam, now)
+		if err != nil {
+			return tinvest.Dec{}, fmt.Errorf("finam payouts: %w", err)
+		}
+		total = total.Add(fin)
+	}
+	return total, nil
 }
 
 // accounts возвращает инвестиционные счета, по которым работаем.
@@ -67,11 +97,19 @@ func (c *Collector) accounts(ctx context.Context) ([]tinvest.Account, error) {
 	return targets, nil
 }
 
-// Meta собирает справку по бумагам среза (дорого: ShareBy + GetDividends на бумагу).
-func (c *Collector) Meta(ctx context.Context, holdings []Holding) (*Meta, error) {
+// Meta собирает справку по бумагам среза (дорого: ShareBy + GetDividends на
+// бумагу) и названия фондов недвижимости с Финама.
+func (c *Collector) Meta(ctx context.Context, s *Snapshot) (*Meta, error) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 	defer cancel()
-	return collectMeta(ctx, c.client, holdings)
+	m, err := collectMeta(ctx, c.client, s.Holdings)
+	if err != nil {
+		return nil, err
+	}
+	if c.finam != nil {
+		collectFinamNames(ctx, c.finam, s.RealtyHoldings, m)
+	}
+	return m, nil
 }
 
 // Cache хранит последний срез и метаданные. Из среза читают и веб-страница, и
@@ -151,7 +189,7 @@ func (c *Cache) refreshMeta(ctx context.Context) {
 	if err != nil {
 		return
 	}
-	m, err := c.col.Meta(ctx, s.Holdings)
+	m, err := c.col.Meta(ctx, s)
 	if err != nil {
 		slog.ErrorContext(ctx, "meta refresh failed", slog.Any("error", err))
 		return

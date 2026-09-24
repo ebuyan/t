@@ -23,7 +23,7 @@
   .sub { font-size: 14px; margin-top: 4px; }
   .pos { color: #128a3c; }
   .neg { color: #c02626; }
-  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
   .asset .name { font-weight: 600; margin-bottom: 10px; }
   .row { display: flex; justify-content: space-between; font-size: 14px; padding: 3px 0; }
   .row .k { color: #6b7280; }
@@ -77,6 +77,7 @@
   <div class="grid2">
     {{template "asset" .Shares}}
     {{template "asset" .Gold}}
+    {{template "asset" .Realty}}
   </div>
 
   {{if or .CanSync .CanSyncPortfolio}}

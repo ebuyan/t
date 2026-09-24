@@ -95,3 +95,43 @@ func TestCeilTo(t *testing.T) {
 		}
 	}
 }
+
+func TestParseDec(t *testing.T) {
+	cases := []struct {
+		in   string
+		prec int
+		want string
+	}{
+		{"", 2, "0.00"},
+		{"0", 2, "0.00"},
+		{"1234.5", 2, "1234.50"},
+		{"-1234.5", 2, "-1234.50"},
+		{"+2.5", 2, "2.50"},
+		{".5", 2, "0.50"},
+		{"1.2e3", 2, "1200.00"},
+		{"-3E-2", 2, "-0.03"},
+		{"0.0000000015", 9, "0.000000002"}, // десятый знак округляется половиной от нуля
+		{"-0.0000000015", 9, "-0.000000002"},
+	}
+	for _, c := range cases {
+		d, err := ParseDec(c.in)
+		if err != nil {
+			t.Errorf("ParseDec(%q): %v", c.in, err)
+			continue
+		}
+		if got := d.String(c.prec); got != c.want {
+			t.Errorf("ParseDec(%q) = %s, ожидалось %s", c.in, got, c.want)
+		}
+	}
+	for _, bad := range []string{"abc", "1,5", "1e40"} {
+		if _, err := ParseDec(bad); err == nil {
+			t.Errorf("ParseDec(%q): ожидалась ошибка", bad)
+		}
+	}
+}
+
+func TestDecParts(t *testing.T) {
+	if got := DecParts(-1, -750_000_000).String(2); got != "-1.75" {
+		t.Errorf("DecParts(-1, -750000000) = %s, ожидалось -1.75", got)
+	}
+}

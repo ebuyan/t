@@ -20,6 +20,40 @@ const nanoScale = 1_000_000_000
 // DecUnits строит Dec из целых единиц (без дробной части).
 func DecUnits(units int64) Dec { return Dec{nanos: units * nanoScale} }
 
+// DecParts строит Dec из целой части и нанодолей — формат google.type.Money
+// (units + nanos), в котором отдают деньги и другие API, например Finam Trade API.
+func DecParts(units int64, nanos int32) Dec {
+	return Dec{nanos: units*nanoScale + int64(nanos)}
+}
+
+// ParseDec разбирает десятичную строку вида "-1234.5", ".5" или "1.2e3" — формат
+// google.type.Decimal. Разбор идёт через big.Rat, без float; знаки дальше
+// девятого после запятой округляются половиной от нуля. Пустая строка — ноль.
+func ParseDec(s string) (Dec, error) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return Dec{}, nil
+	}
+	r, ok := new(big.Rat).SetString(s)
+	if !ok {
+		return Dec{}, fmt.Errorf("not a decimal: %q", s)
+	}
+	r.Mul(r, new(big.Rat).SetInt64(nanoScale))
+
+	// Округление половины от нуля: |num| * 2 + den, делённое на 2*den.
+	num := new(big.Int).Abs(r.Num())
+	den := r.Denom()
+	num.Mul(num, big.NewInt(2)).Add(num, den)
+	num.Quo(num, new(big.Int).Mul(den, big.NewInt(2)))
+	if r.Sign() < 0 {
+		num.Neg(num)
+	}
+	if !num.IsInt64() {
+		return Dec{}, fmt.Errorf("decimal out of range: %q", s)
+	}
+	return Dec{nanos: num.Int64()}, nil
+}
+
 // jsonNum принимает и число, и строку: REST-обёртка отдаёт int64 строкой.
 type jsonNum int64
 

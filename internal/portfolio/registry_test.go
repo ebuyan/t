@@ -39,6 +39,7 @@ func TestUpsertEntryPrepends(t *testing.T) {
   stock:: -1162000
   gold:: -97000
   dividends:: 200000
+  realty:: 0
 
 - date:: 2026-07-18`
 	if !strings.HasPrefix(got, want) {
@@ -76,12 +77,13 @@ func TestUpsertEntryReplacesSameDate(t *testing.T) {
 }
 
 // income должен сходиться с суммой округлённых слагаемых, иначе в файле
-// появится запись, где income != stock + gold + dividends.
+// появится запись, где income != stock + gold + dividends + realty.
 func TestRegistryEntryIncomeMatchesParts(t *testing.T) {
 	s := &Snapshot{
-		Date:       time.Date(2026, 7, 20, 11, 0, 0, 0, time.UTC),
-		StockYield: tinvest.DecUnits(-1162021),
-		GoldYield:  tinvest.DecUnits(-97248),
+		Date:        time.Date(2026, 7, 20, 11, 0, 0, 0, time.UTC),
+		StockYield:  tinvest.DecUnits(-1162021),
+		GoldYield:   tinvest.DecUnits(-97248),
+		RealtyYield: tinvest.DecUnits(-15100),
 	}
 	e := newRegistryEntry(s, tinvest.DecUnits(200294))
 
@@ -94,16 +96,19 @@ func TestRegistryEntryIncomeMatchesParts(t *testing.T) {
 	if got, want := e.dividends.String(0), "201000"; got != want {
 		t.Errorf("dividends = %s, хотим %s", got, want)
 	}
-	if got, want := e.income.String(0), "-1058000"; got != want {
+	if got, want := e.realty.String(0), "-15000"; got != want {
+		t.Errorf("realty = %s, хотим %s", got, want)
+	}
+	if got, want := e.income.String(0), "-1073000"; got != want {
 		t.Errorf("income = %s, хотим %s (сумма округлённых частей)", got, want)
 	}
 }
 
 // Порядок строк — контракт с dataviewjs в волте: он разбирает блок текстом по
-// номерам строк, поэтому dividends обязаны идти после gold.
+// номерам строк, поэтому новые поля (dividends, realty) обязаны идти после gold.
 func TestRegistryEntryFieldOrder(t *testing.T) {
 	lines := entry("2026-07-20", -1162000, -97000, 200000).render()
-	want := []string{"- date:: ", "  income:: ", "  stock:: ", "  gold:: ", "  dividends:: "}
+	want := []string{"- date:: ", "  income:: ", "  stock:: ", "  gold:: ", "  dividends:: ", "  realty:: "}
 	if len(lines) != len(want) {
 		t.Fatalf("строк в записи: %d, хотим %d", len(lines), len(want))
 	}

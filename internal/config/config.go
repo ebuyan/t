@@ -7,6 +7,10 @@ type Config struct {
 
 	Token string `envconfig:"TINVEST_TOKEN" required:"true" default:""`
 
+	// FinamToken — секрет Finam Trade API (личный кабинет → «Токены»). Пустой —
+	// счета Финама (недвижимость) не подтягиваются.
+	FinamToken string `envconfig:"FINAM_TOKEN"`
+
 	RegistryFile     string `envconfig:"TINVEST_REGISTRY_FILE"`
 	RegistrySchedule string `envconfig:"TINVEST_REGISTRY_SCHEDULE"`
 
