@@ -201,13 +201,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         // Дивиденды и рента — не классы активов, а суммы выплат за всё время,
         // поэтому без доли: деньги уже лежат в кеше или вложены обратно в бумаги.
-        // Рента (выплаты по паям недвижимости) — отдельной строкой под дивидендами.
+        // Рента (выплаты по паям недвижимости) — отдельной строкой под дивидендами,
+        // всегда, даже нулём, если сервис отдаёт поле: старая сборка его не знает.
         let rent = t.rent ?? 0
         let stockDividends = dividends - rent
         if stockDividends != 0 {
             rows.append(Row(label: "Дивиденды", cols: [rub(stockDividends)], sign: stockDividends))
         }
-        if rent != 0 {
+        if t.rent != nil {
             rows.append(Row(label: "Рента", cols: [rub(rent)], sign: rent))
         }
         rows.append(nil)
