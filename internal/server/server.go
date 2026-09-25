@@ -84,7 +84,7 @@ func handleIndex(cfg Config) http.HandlerFunc {
 		m, _, _ := cfg.Cache.Meta()
 		divs, _, _ := cfg.Cache.Dividends()
 
-		view := portfolio.BuildYieldView(s, m, divs, updated)
+		view := portfolio.BuildYieldView(s, m, divs.Total, updated)
 		view.CanSync = cfg.SyncRegistry != nil
 		view.CanSyncPortfolio = cfg.SyncPortfolio != nil
 
@@ -136,13 +136,16 @@ type todayResponse struct {
 	// Dividends — полученные за всё время выплаты за вычетом налога: дивиденды,
 	// купоны и выплаты по паям фондов. Полный доход = income + dividends; считает
 	// потребитель.
-	Dividends json.Number   `json:"dividends"`
-	Shares    assetJSON     `json:"shares"`
-	Gold      assetJSON     `json:"gold"`
-	Realty    assetJSON     `json:"realty"`
-	Cash      json.Number   `json:"cash"`
-	Holdings  []holdingJSON `json:"holdings"`
-	Updated   string        `json:"updated"`
+	Dividends json.Number `json:"dividends"`
+	// Rent — часть dividends: рента по паям фондов недвижимости (realtyFunds).
+	// Дивидендами без ренты потребитель считает dividends − rent.
+	Rent     json.Number   `json:"rent"`
+	Shares   assetJSON     `json:"shares"`
+	Gold     assetJSON     `json:"gold"`
+	Realty   assetJSON     `json:"realty"`
+	Cash     json.Number   `json:"cash"`
+	Holdings []holdingJSON `json:"holdings"`
+	Updated  string        `json:"updated"`
 }
 
 // handleAPIToday отдаёт JSON-сводку из кеша: полная стоимость портфеля, изменение
@@ -171,7 +174,8 @@ func handleAPIToday(cfg Config) http.HandlerFunc {
 			DayChange:      num(s.DayChange),
 			DayChangePct:   num(s.DayChangePct),
 			Income:         num(s.Yield()),
-			Dividends:      num(divs),
+			Dividends:      num(divs.Total),
+			Rent:           num(divs.Rent),
 			Shares:         assetJSON{Value: num(s.Shares), Yield: num(s.StockYield)},
 			Gold:           assetJSON{Value: num(s.Gold), Yield: num(s.GoldYield)},
 			Realty:         assetJSON{Value: num(s.Realty), Yield: num(s.RealtyYield)},

@@ -98,7 +98,7 @@ func registrySync(c *portfolio.Cache, registryFile, portfolioFile string) func(c
 		if err != nil {
 			return err
 		}
-		return writeRegistry(ctx, s, divs, registryFile, portfolioFile)
+		return writeRegistry(ctx, s, divs.Total, registryFile, portfolioFile)
 	}
 }
 
@@ -146,7 +146,7 @@ func startRegistrySchedule(ctx context.Context, c *portfolio.Cache, schCfg, regi
 		if err != nil {
 			return err
 		}
-		return writeRegistry(ctx, s, divs, registryFile, portfolioFile)
+		return writeRegistry(ctx, s, divs.Total, registryFile, portfolioFile)
 	})
 }
 

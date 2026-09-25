@@ -17,8 +17,8 @@ var dividendsSince = time.Date(2015, 1, 1, 0, 0, 0, 0, time.UTC)
 // деньгами и потому не попало в expectedYield позиций.
 func collectDividends(
 	ctx context.Context, c *tinvest.Client, accounts []tinvest.Account, now time.Time,
-) (tinvest.Dec, error) {
-	var total tinvest.Dec
+) (Payouts, error) {
+	var total Payouts
 
 	for _, a := range accounts {
 		from := a.OpenedDate
@@ -28,11 +28,11 @@ func collectDividends(
 
 		ops, err := c.OperationsByCursor(ctx, a.ID, from, now, tinvest.DividendOperationTypes())
 		if err != nil {
-			return tinvest.Dec{}, err
+			return Payouts{}, err
 		}
 
 		d := tinvest.SumDividends(ops)
-		total = total.Add(d.Net)
+		total = total.Add(payoutsByTicker(d.ByTicker))
 
 		if !d.ToCard.IsZero() {
 			slog.WarnContext(ctx, "dividends paid to card are not counted in income",

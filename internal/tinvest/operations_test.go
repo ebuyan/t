@@ -57,6 +57,10 @@ func TestSumDividends(t *testing.T) {
 	if got := d.ToCard.String(2); got != "2000.00" {
 		t.Errorf("ToCard = %q, хотим %q", got, "2000.00")
 	}
+	// Разбивка по тикеру — только то, что вошло в Net.
+	if len(d.ByTicker) != 2 || d.ByTicker["LKOH"].String(2) != "8700.00" || d.ByTicker["SBER"].String(2) != "4300.00" {
+		t.Errorf("ByTicker = %v", d.ByTicker)
+	}
 	if len(d.Skipped) != 1 || d.Skipped[0] != "TSLA" {
 		t.Errorf("Skipped = %v, хотим [TSLA]", d.Skipped)
 	}

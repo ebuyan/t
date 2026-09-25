@@ -52,10 +52,10 @@ func (t *TBankSource) Portfolio(ctx context.Context) (*SourcePortfolio, error) {
 }
 
 // Payouts — полученные дивиденды по истории операций с даты открытия счетов.
-func (t *TBankSource) Payouts(ctx context.Context, now time.Time) (tinvest.Dec, error) {
+func (t *TBankSource) Payouts(ctx context.Context, now time.Time) (Payouts, error) {
 	accounts, err := t.accounts(ctx)
 	if err != nil {
-		return tinvest.Dec{}, err
+		return Payouts{}, err
 	}
 	return collectDividends(ctx, t.client, accounts, now)
 }

@@ -113,6 +113,8 @@ func (c *Client) OperationsByCursor(
 type Dividends struct {
 	// Net — чистая сумма, зачисленная на счёт: выплаты минус удержанный налог.
 	Net Dec
+	// ByTicker — Net в разрезе тикера бумаги (у операции без тикера — ключ "").
+	ByTicker map[string]Dec
 	// ToCard — выплаты, ушедшие сразу на карту (opTypeDivExt). В Net не входят:
 	// по одной операции не понять, дублирует ли она зачисление на счёт, а тихо
 	// завысить доход хуже, чем показать его без этих выплат.
@@ -125,7 +127,7 @@ type Dividends struct {
 // SumDividends раскладывает операции по итогу. Ожидает уже отфильтрованный
 // ответ API (типы из DividendOperationTypes); чужие типы игнорирует.
 func SumDividends(ops []Operation) Dividends {
-	var d Dividends
+	d := Dividends{ByTicker: map[string]Dec{}}
 	for i := range ops {
 		op := &ops[i]
 		if cur := op.Payment.Currency; cur != "" && !strings.EqualFold(cur, "rub") {
@@ -135,6 +137,7 @@ func SumDividends(ops []Operation) Dividends {
 		switch {
 		case slices.Contains(dividendNetTypes, op.Type):
 			d.Net = d.Net.Add(op.Payment.Dec())
+			d.ByTicker[op.Ticker] = d.ByTicker[op.Ticker].Add(op.Payment.Dec())
 		case op.Type == opTypeDivExt:
 			d.ToCard = d.ToCard.Add(op.Payment.Dec())
 		}

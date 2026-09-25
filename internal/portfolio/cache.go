@@ -54,16 +54,16 @@ func (c *Collector) Snapshot(ctx context.Context) (*Snapshot, error) {
 
 // Dividends собирает полученные за всё время выплаты по всем источникам. Долгая
 // история, поэтому отдельно от среза.
-func (c *Collector) Dividends(ctx context.Context) (tinvest.Dec, error) {
+func (c *Collector) Dividends(ctx context.Context) (Payouts, error) {
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
 
 	now := time.Now()
-	var total tinvest.Dec
+	var total Payouts
 	for _, src := range c.sources {
 		d, err := src.Payouts(ctx, now)
 		if err != nil {
-			return tinvest.Dec{}, fmt.Errorf("%s payouts: %w", src.Name(), err)
+			return Payouts{}, fmt.Errorf("%s payouts: %w", src.Name(), err)
 		}
 		total = total.Add(d)
 	}
@@ -94,7 +94,7 @@ type Cache struct {
 	snapErr error
 	meta    *Meta
 	metaAt  time.Time
-	divs    tinvest.Dec
+	divs    Payouts
 	divsAt  time.Time
 	divsOK  bool
 }
@@ -127,13 +127,13 @@ func (c *Cache) Meta() (*Meta, time.Time, error) {
 	return c.meta, c.metaAt, nil
 }
 
-// Dividends возвращает сумму полученных дивидендов за всё время и время сбора.
-// Пока не собраны — ошибку: лучше показать доход без дивидендов, чем нулём.
-func (c *Cache) Dividends() (tinvest.Dec, time.Time, error) {
+// Dividends возвращает полученные за всё время выплаты и время сбора. Пока не
+// собраны — ошибку: лучше показать доход без дивидендов, чем нулём.
+func (c *Cache) Dividends() (Payouts, time.Time, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	if !c.divsOK {
-		return tinvest.Dec{}, time.Time{}, fmt.Errorf("dividends not collected yet")
+		return Payouts{}, time.Time{}, fmt.Errorf("dividends not collected yet")
 	}
 	return c.divs, c.divsAt, nil
 }

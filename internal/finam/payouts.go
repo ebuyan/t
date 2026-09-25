@@ -6,6 +6,9 @@ import "tinvest/internal/tinvest"
 type Payouts struct {
 	// Net — выплаты за вычетом налога, удержанного по тем же бумагам.
 	Net tinvest.Dec
+	// ByTicker — та же сумма в разрезе биржевого кода бумаги: по нему выплаты
+	// относятся к классу (рента по паям недвижимости — отдельно от дивидендов).
+	ByTicker map[string]tinvest.Dec
 	// Skipped — транзакции, которые не удалось учесть (не в рублях или
 	// неразборчивая сумма): их список уходит в лог, чтобы сумма не была молча
 	// заниженной.
@@ -25,7 +28,7 @@ func SumPayouts(txs []Transaction) Payouts {
 		}
 	}
 
-	var p Payouts
+	p := Payouts{ByTicker: map[string]tinvest.Dec{}}
 	for i := range txs {
 		tx := &txs[i]
 		switch {
@@ -44,6 +47,8 @@ func SumPayouts(txs []Transaction) Payouts {
 			continue
 		}
 		p.Net = p.Net.Add(v)
+		t := Ticker(tx.Symbol)
+		p.ByTicker[t] = p.ByTicker[t].Add(v)
 	}
 	return p
 }

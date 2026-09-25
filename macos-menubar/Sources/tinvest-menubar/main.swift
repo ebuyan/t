@@ -45,9 +45,12 @@ struct Today: Decodable {
     let dayChangePct: Double
     // income — курсовая переоценка позиций (акции + золото), без дивидендов.
     let income: Double
-    // dividends — полученные за всё время дивиденды за вычетом налога.
-    // Опционально: старая сборка сервиса поля ещё не отдаёт.
+    // dividends — полученные за всё время выплаты за вычетом налога, включая
+    // ренту. Опционально: старая сборка сервиса поля ещё не отдаёт.
     let dividends: Double?
+    // rent — часть dividends: рента по паям фондов недвижимости. Опционально:
+    // без поля вся сумма показывается дивидендами.
+    let rent: Double?
     let shares: Asset
     let gold: Asset
     // realty — недвижимость (паи ЗПИФ на Финаме). Опционально: старая сборка
@@ -59,7 +62,7 @@ struct Today: Decodable {
 
     enum CodingKeys: String, CodingKey {
         case portfolioValue = "portfolio_value"
-        case total, income, dividends, shares, gold, realty, cash, holdings, updated
+        case total, income, dividends, rent, shares, gold, realty, cash, holdings, updated
         case dayChange = "day_change"
         case dayChangePct = "day_change_pct"
     }
@@ -196,11 +199,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             // Кеш: доля от той же базы, доходности у кеша нет.
             rows.append(Row(label: "Кеш", cols: [rub(t.cash), pct(pctOf(t.cash, shareBase))], sign: t.cash))
         }
-        if dividends != 0 {
-            // Дивиденды — не класс активов, а сумма выплат за всё время (включая
-            // выплаты по паям фондов), поэтому без доли: деньги уже лежат в кеше
-            // или вложены обратно в бумаги.
-            rows.append(Row(label: "Дивиденды", cols: [rub(dividends)], sign: dividends))
+        // Дивиденды и рента — не классы активов, а суммы выплат за всё время,
+        // поэтому без доли: деньги уже лежат в кеше или вложены обратно в бумаги.
+        // Рента (выплаты по паям недвижимости) — отдельной строкой под дивидендами.
+        let rent = t.rent ?? 0
+        let stockDividends = dividends - rent
+        if stockDividends != 0 {
+            rows.append(Row(label: "Дивиденды", cols: [rub(stockDividends)], sign: stockDividends))
+        }
+        if rent != 0 {
+            rows.append(Row(label: "Рента", cols: [rub(rent)], sign: rent))
         }
         rows.append(nil)
 

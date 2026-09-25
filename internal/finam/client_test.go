@@ -221,4 +221,8 @@ func TestSumPayouts(t *testing.T) {
 	if len(p.Skipped) != 1 || p.Skipped[0] != "USD@XNYS" {
 		t.Errorf("Skipped = %v", p.Skipped)
 	}
+	// Разбивка по тикеру: налог — на ту же бумагу, биржа отрезана.
+	if len(p.ByTicker) != 1 || p.ByTicker["FUND"].String(2) != "870.00" {
+		t.Errorf("ByTicker = %v", p.ByTicker)
+	}
 }

@@ -233,3 +233,19 @@ func TestFinamSourceAssetFailure(t *testing.T) {
 		t.Errorf("недвижимость = %s, ожидалось 100", s.Realty.String(0))
 	}
 }
+
+// Рента — выплаты по паям из realtyFunds у любого брокера, остальное — дивиденды.
+func TestPayoutsByTicker(t *testing.T) {
+	p := payoutsByTicker(map[string]tinvest.Dec{
+		"SBER":         dec(t, "1000"),
+		"XACCSK":       dec(t, "300"),
+		"RU000A102N77": dec(t, "200"),
+		"":             dec(t, "5"),
+	})
+	if got := p.Total.String(0); got != "1505" {
+		t.Errorf("Total = %s, ожидалось 1505", got)
+	}
+	if got := p.Rent.String(0); got != "500" {
+		t.Errorf("Rent = %s, ожидалось 500", got)
+	}
+}

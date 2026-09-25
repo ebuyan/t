@@ -63,7 +63,33 @@ type Source interface {
 	Portfolio(ctx context.Context) (*SourcePortfolio, error)
 	// Payouts — полученные за всё время выплаты за вычетом налога: дивиденды,
 	// купоны, выплаты по паям. В доходность позиций они не входят.
-	Payouts(ctx context.Context, now time.Time) (tinvest.Dec, error)
+	Payouts(ctx context.Context, now time.Time) (Payouts, error)
+}
+
+// Payouts — полученные за всё время выплаты за вычетом налога.
+type Payouts struct {
+	// Total — все выплаты: дивиденды, купоны и рента по паям фондов.
+	Total tinvest.Dec
+	// Rent — часть Total по паям недвижимости (realtyFunds). Класс выплаты, как
+	// и позиции, определяет бумага, а не брокер.
+	Rent tinvest.Dec
+}
+
+// Add складывает выплаты двух источников.
+func (p Payouts) Add(o Payouts) Payouts {
+	return Payouts{Total: p.Total.Add(o.Total), Rent: p.Rent.Add(o.Rent)}
+}
+
+// payoutsByTicker собирает Payouts из сумм по биржевым кодам бумаг.
+func payoutsByTicker(byTicker map[string]tinvest.Dec) Payouts {
+	var p Payouts
+	for ticker, v := range byTicker {
+		p.Total = p.Total.Add(v)
+		if _, ok := realtyFunds[ticker]; ok {
+			p.Rent = p.Rent.Add(v)
+		}
+	}
+	return p
 }
 
 // assetClass — класс актива в срезе.

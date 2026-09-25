@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"tinvest/internal/finam"
-	"tinvest/internal/tinvest"
 )
 
 // payoutsSince — запасное начало истории выплат Финама, если API не отдал дату
@@ -147,20 +146,20 @@ func finamKind(assetType string) Kind {
 
 // Payouts суммирует выплаты по всем счетам Финама с даты открытия: дивиденды,
 // купоны и выплаты по паям, за вычетом налога.
-func (f *FinamSource) Payouts(ctx context.Context, now time.Time) (tinvest.Dec, error) {
+func (f *FinamSource) Payouts(ctx context.Context, now time.Time) (Payouts, error) {
 	ids, err := f.client.AccountIDs(ctx)
 	if err != nil {
-		return tinvest.Dec{}, err
+		return Payouts{}, err
 	}
 
-	var total tinvest.Dec
+	var total Payouts
 	for _, id := range ids {
 		txs, err := f.accountTransactions(ctx, id, now)
 		if err != nil {
-			return tinvest.Dec{}, err
+			return Payouts{}, err
 		}
 		p := finam.SumPayouts(txs)
-		total = total.Add(p.Net)
+		total = total.Add(payoutsByTicker(p.ByTicker))
 		if len(p.Skipped) > 0 {
 			slog.WarnContext(ctx, "finam payouts skipped",
 				slog.String("account_id", id), slog.Any("symbols", p.Skipped))
