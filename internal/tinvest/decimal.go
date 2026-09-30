@@ -218,7 +218,7 @@ func Group(s string) string {
 
 func pow10(n int) int64 {
 	r := int64(1)
-	for i := 0; i < n; i++ {
+	for range n {
 		r *= 10
 	}
 	return r

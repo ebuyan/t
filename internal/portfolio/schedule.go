@@ -2,6 +2,7 @@ package portfolio
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 )
@@ -39,7 +40,7 @@ func ParseSchedule(s string) (Schedule, error) {
 	if len(fields) == 1 {
 		return sch, nil
 	}
-	for _, name := range strings.Split(strings.Join(fields[:len(fields)-1], ","), ",") {
+	for name := range strings.SplitSeq(strings.Join(fields[:len(fields)-1], ","), ",") {
 		name = strings.ToLower(strings.TrimSpace(name))
 		if name == "" {
 			continue
@@ -57,7 +58,7 @@ func ParseSchedule(s string) (Schedule, error) {
 func (s Schedule) Next(now time.Time) time.Time {
 	midnight := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 	// Максимум неделя вперёд: за 8 итераций подходящий день найдётся всегда.
-	for i := 0; i < 8; i++ {
+	for i := range 8 {
 		candidate := midnight.AddDate(0, 0, i).Add(s.At)
 		if candidate.After(now) && s.matches(candidate.Weekday()) {
 			return candidate
@@ -70,12 +71,7 @@ func (s Schedule) matches(day time.Weekday) bool {
 	if len(s.Days) == 0 {
 		return true
 	}
-	for _, d := range s.Days {
-		if d == day {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(s.Days, day)
 }
 
 // Quarterly — то же время, но только первого числа квартала.

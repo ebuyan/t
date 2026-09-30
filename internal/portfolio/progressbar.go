@@ -210,11 +210,11 @@ func resolveGoal(ctx context.Context, name, goalRaw string, hasGoal bool) (int64
 
 // splitField разбирает строку «key: value». ok=false для строк без двоеточия.
 func splitField(line string) (key, value string, ok bool) {
-	i := strings.IndexByte(line, ':')
-	if i < 0 {
+	before, after, ok := strings.Cut(line, ":")
+	if !ok {
 		return "", "", false
 	}
-	return strings.TrimSpace(line[:i]), strings.TrimSpace(line[i+1:]), true
+	return strings.TrimSpace(before), strings.TrimSpace(after), true
 }
 
 // leadingWS возвращает ведущие пробелы/табы строки — чтобы отступ не терялся.

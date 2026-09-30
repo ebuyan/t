@@ -218,8 +218,8 @@ func alignByTicker(t *table, byTicker, labels map[string]string, order []string)
 
 // tickerOf вытаскивает тикер из подписи «SBERP — Сбер Банк».
 func tickerOf(label string) string {
-	if i := strings.Index(label, "—"); i >= 0 {
-		return strings.TrimSpace(label[:i])
+	if before, _, ok := strings.Cut(label, "—"); ok {
+		return strings.TrimSpace(before)
 	}
 	return strings.TrimSpace(label)
 }

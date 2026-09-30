@@ -63,7 +63,7 @@ func (c *Client) call(ctx context.Context, service, method string, req, resp any
 
 	const attempts = 3
 	var lastErr error
-	for i := 0; i < attempts; i++ {
+	for i := range attempts {
 		if i > 0 {
 			delay := time.Duration(1<<uint(i-1)) * 2 * time.Second
 			select {

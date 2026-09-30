@@ -77,7 +77,7 @@ func (c *Client) OperationsByCursor(
 	var all []Operation
 	cursor := ""
 
-	for page := 0; page < maxOperationPages; page++ {
+	for range maxOperationPages {
 		req := map[string]any{
 			"accountId":      accountID,
 			"from":           from.UTC().Format(time.RFC3339),

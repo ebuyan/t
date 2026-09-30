@@ -48,37 +48,29 @@ func run() error {
 
 	var wg sync.WaitGroup
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		cache.Run(ctx)
-	}()
+	})
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		server.Serve(ctx, server.Config{
 			Addr:          cfg.HTTPAddr,
 			Cache:         cache,
 			SyncRegistry:  registrySync(cache, cfg.RegistryFile, cfg.PortfolioFile),
 			SyncPortfolio: portfolioSync(cfg.PortfolioFile),
 		})
-	}()
+	})
 
 	if cfg.RegistrySchedule != "" && cfg.RegistryFile != "" {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			startRegistrySchedule(ctx, cache, cfg.RegistrySchedule, cfg.RegistryFile, cfg.PortfolioFile)
-		}()
+		})
 	}
 
 	if cfg.PortfolioSchedule != "" && cfg.PortfolioFile != "" {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			startPortfolioSchedule(ctx, cache, cfg.PortfolioSchedule, cfg.PortfolioFile)
-		}()
+		})
 	}
 
 	wg.Wait()

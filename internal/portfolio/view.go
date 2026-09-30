@@ -82,8 +82,8 @@ func BuildYieldView(s *Snapshot, m *Meta, dividends tinvest.Dec, updated time.Ti
 		Shares:       buildAsset("Акции", s.Shares, s.StockYield, base),
 		Gold:         buildAsset("Золото", s.Gold, s.GoldYield, base),
 		Realty:       buildAsset("Недвижимость", s.Realty, s.RealtyYield, base),
+		Holdings:     buildHoldings(s, m),
 	}
-	v.Holdings = buildHoldings(s, m)
 	return v
 }
 

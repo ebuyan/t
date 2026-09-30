@@ -194,7 +194,7 @@ func (c *Client) post(ctx context.Context, path string, req, resp any) error {
 func (c *Client) retry(ctx context.Context, call func() (bool, error)) error {
 	const attempts = 3
 	var lastErr error
-	for i := 0; i < attempts; i++ {
+	for i := range attempts {
 		if i > 0 {
 			delay := time.Duration(1<<uint(i-1)) * 2 * time.Second
 			select {
