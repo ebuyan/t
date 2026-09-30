@@ -162,12 +162,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // render печатает сводку. В строке меню — изменение за день (цветом),
     // подробности — в выпадашке.
     private func render(_ t: Today) {
-        let up = t.dayChange >= 0
-        let arrow = up ? "▲" : "▼"
-        statusItem.button?.attributedTitle = NSAttributedString(
-            string: "\(arrow) \(signedRub(t.dayChange))",
-            attributes: [.foregroundColor: up ? NSColor.systemGreen : NSColor.systemRed]
-        )
+        statusItem.button?.attributedTitle = statusTitle(t.dayChange)
 
         // Доход за всё время = курсовая переоценка + полученные выплаты.
         // Знаменатель — вложенное в акции, золото и недвижимость (стоимость минус
@@ -203,8 +198,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // поэтому без доли: деньги уже лежат в кеше или вложены обратно в бумаги.
         // Рента (выплаты по паям недвижимости) — отдельной строкой под дивидендами,
         // всегда, даже нулём, если сервис отдаёт поле: старая сборка его не знает.
+        // Выплаты — своим блоком, отделённым от классов разделителем.
         let rent = t.rent ?? 0
         let stockDividends = dividends - rent
+        if stockDividends != 0 || t.rent != nil {
+            rows.append(nil)
+        }
         if stockDividends != 0 {
             rows.append(Row(label: "Дивиденды", cols: [rub(stockDividends)], sign: stockDividends))
         }
@@ -223,6 +222,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(.separator())
         menu.addItem(footerItem("Обновлено в \(shortTime(t.updated))"))
         statusItem.menu = menu
+    }
+
+    // statusTitle — компактная строка меню-бара: только модуль суммы, без
+    // стрелки, знака и ₽ (направление видно по цвету), узкие пробелы между
+    // разрядами.
+    private func statusTitle(_ change: Double) -> NSAttributedString {
+        let up = change >= 0
+        let digits = (rubFormatter.string(from: NSNumber(value: abs(change))) ?? "\(Int(abs(change)))")
+            .replacingOccurrences(of: "\u{00A0}", with: "\u{202F}")
+            .replacingOccurrences(of: " ", with: "\u{202F}")
+        return NSAttributedString(
+            string: digits,
+            attributes: [.font: statusFont, .foregroundColor: up ? NSColor.systemGreen : NSColor.systemRed]
+        )
     }
 
     // footerItem — подвал меню: неактивная подпись по центру. Обычный пункт текст
@@ -384,6 +397,9 @@ struct Row {
 // --- Оформление строк сводки ---
 
 private let menuFont = NSFont.menuFont(ofSize: 0)
+// Шрифт строки меню-бара — системного размера, цифры моноширинные, чтобы
+// ширина не прыгала при каждом обновлении.
+private let statusFont = NSFont.monospacedDigitSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
 // Цифры моноширинные, чтобы разряды в колонках вставали друг под другом.
 private let valueFont = NSFont.monospacedDigitSystemFont(ofSize: menuFont.pointSize, weight: .regular)
 // Отступ между подписью и первой колонкой и между колонками значений.
