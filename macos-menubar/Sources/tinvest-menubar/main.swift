@@ -232,10 +232,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let digits = (rubFormatter.string(from: NSNumber(value: abs(change))) ?? "\(Int(abs(change)))")
             .replacingOccurrences(of: "\u{00A0}", with: "\u{202F}")
             .replacingOccurrences(of: " ", with: "\u{202F}")
-        return NSAttributedString(
+        let color = up ? NSColor.systemGreen : NSColor.systemRed
+        let title = NSMutableAttributedString()
+        if let arrow = statusArrow(up: up, color: color) {
+            title.append(arrow)
+            title.append(NSAttributedString(string: "\u{2009}", attributes: [.font: statusFont]))
+        }
+        title.append(NSAttributedString(
             string: digits,
-            attributes: [.font: statusFont, .foregroundColor: up ? NSColor.systemGreen : NSColor.systemRed]
-        )
+            attributes: [.font: statusFont, .foregroundColor: color]
+        ))
+        return title
+    }
+
+    // statusArrow — тонкая стрелка направления перед суммой: SF Symbol лёгкого
+    // начертания, окрашенный в цвет суммы и отцентрованный по высоте цифр.
+    private func statusArrow(up: Bool, color: NSColor) -> NSAttributedString? {
+        let config = NSImage.SymbolConfiguration(pointSize: statusFont.pointSize * 0.8, weight: .light)
+            .applying(NSImage.SymbolConfiguration(paletteColors: [color]))
+        guard let image = NSImage(systemSymbolName: up ? "arrow.up" : "arrow.down", accessibilityDescription: nil)?
+            .withSymbolConfiguration(config) else { return nil }
+        image.isTemplate = false
+        let attachment = NSTextAttachment()
+        attachment.image = image
+        let size = image.size
+        attachment.bounds = NSRect(x: 0, y: (statusFont.capHeight - size.height) / 2, width: size.width, height: size.height)
+        return NSAttributedString(attachment: attachment)
     }
 
     // footerItem — подвал меню: неактивная подпись по центру. Обычный пункт текст
