@@ -85,7 +85,6 @@
   .stats { display: flex; gap: 12px 28px; flex-wrap: wrap; }
   .stat .label { margin-bottom: 4px; }
   .delta { display: inline-flex; align-items: baseline; gap: 6px; font-size: 17px; font-weight: 600; white-space: nowrap; }
-  .delta .arrow { font-size: 12px; }
   .chip { font-size: 12px; font-weight: 600; padding: 2px 7px; border-radius: 999px; }
   .chip.pos { background: var(--pos-bg); }
   .chip.neg { background: var(--neg-bg); }
@@ -106,11 +105,9 @@
   .classes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin: 16px 0 28px; }
   .asset { padding: 18px 20px; }
   .asset-head { display: flex; align-items: center; gap: 8px; font-weight: 600; }
-  .asset-head .share { margin-left: auto; color: var(--text-2); font-weight: 500; font-size: 13px; }
   .asset-main { display: flex; justify-content: space-between; align-items: baseline; gap: 8px 12px; flex-wrap: wrap; margin: 8px 0 10px; }
   .asset-value { font-size: 24px; font-weight: 650; letter-spacing: -.4px; }
-  .asset-main .delta { font-size: 14px; }
-  .asset-main .delta .arrow { font-size: 10px; }
+  .asset-main .delta { font-size: 14px; font-weight: 400; }
   .row { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; font-size: 14px; padding: 4px 0; }
   .row .k { color: var(--text-2); white-space: nowrap; }
   .row .v { white-space: nowrap; text-align: right; }
@@ -288,11 +285,11 @@
 </body>
 </html>
 {{define "delta"}}
-<div class="delta {{if .Pos}}pos{{else}}neg{{end}}"><span class="arrow">{{if .Pos}}▲{{else}}▼{{end}}</span><span class="money">{{.Amount}}</span><span class="chip {{if .Pos}}pos{{else}}neg{{end}}">{{.Pct}}</span></div>
+<div class="delta {{if .Pos}}pos{{else}}neg{{end}}"><span class="money">{{.Amount}}</span><span class="chip {{if .Pos}}pos{{else}}neg{{end}}">{{.Pct}}</span></div>
 {{end}}
 {{define "asset"}}
 <div class="card asset">
-  <div class="asset-head"><span class="dot {{.Class}}"></span>{{.Name}}<span class="share">{{.Share}}</span></div>
+  <div class="asset-head"><span class="dot {{.Class}}"></span>{{.Name}}</div>
   <div class="asset-main">
     <div class="asset-value money">{{.Value}}</div>
     <div title="Изменение за сегодня">{{template "delta" .Today}}</div>
