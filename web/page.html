@@ -107,7 +107,10 @@
   .asset { padding: 18px 20px; }
   .asset-head { display: flex; align-items: center; gap: 8px; font-weight: 600; }
   .asset-head .share { margin-left: auto; color: var(--text-2); font-weight: 500; font-size: 13px; }
-  .asset-value { font-size: 24px; font-weight: 650; letter-spacing: -.4px; margin: 8px 0 10px; }
+  .asset-main { display: flex; justify-content: space-between; align-items: baseline; gap: 8px 12px; flex-wrap: wrap; margin: 8px 0 10px; }
+  .asset-value { font-size: 24px; font-weight: 650; letter-spacing: -.4px; }
+  .asset-main .delta { font-size: 14px; }
+  .asset-main .delta .arrow { font-size: 10px; }
   .row { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; font-size: 14px; padding: 4px 0; }
   .row .k { color: var(--text-2); white-space: nowrap; }
   .row .v { white-space: nowrap; text-align: right; }
@@ -290,9 +293,11 @@
 {{define "asset"}}
 <div class="card asset">
   <div class="asset-head"><span class="dot {{.Class}}"></span>{{.Name}}<span class="share">{{.Share}}</span></div>
-  <div class="asset-value money">{{.Value}}</div>
+  <div class="asset-main">
+    <div class="asset-value money">{{.Value}}</div>
+    <div title="Изменение за сегодня">{{template "delta" .Today}}</div>
+  </div>
   <div class="row"><span class="k">Доход</span><span class="v {{if .Positive}}pos{{else}}neg{{end}}"><span class="money">{{.Yield}}</span><span class="chip {{if .Positive}}pos{{else}}neg{{end}}">{{.YieldPct}}</span></span></div>
-  <div class="row"><span class="k">За сегодня</span><span class="v {{if .Today.Pos}}pos{{else}}neg{{end}}"><span class="money">{{.Today.Amount}}</span><span class="chip {{if .Today.Pos}}pos{{else}}neg{{end}}">{{.Today.Pct}}</span></span></div>
   {{if .PayoutLabel}}<div class="row payout"><span class="k">{{.PayoutLabel}}</span><span class="v money {{if .PayoutPos}}pos{{else}}neg{{end}}">{{.Payout}}</span></div>{{end}}
 </div>
 {{end}}
