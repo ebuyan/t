@@ -93,7 +93,18 @@ func TestBuildYieldView(t *testing.T) {
 		t.Errorf("кеш за сегодня = %+v", cash)
 	}
 	sber := v.Holdings[2]
-	if sber.Ticker != "SBER" || sber.Value != "600 000 ₽" || sber.Name != "Сбер Банк" {
+	if gold.Class != "gold" || cash.Class != "cash" {
+		t.Errorf("классы строк: золото %q, кеш %q", gold.Class, cash.Class)
+	}
+	// Распределение — в порядке акции, недвижимость (нет), золото, кеш.
+	if len(v.Allocation) != 3 || v.Allocation[0].Name != "Акции" || v.Allocation[1].Name != "Золото" ||
+		v.Allocation[2].Name != "Кеш" || v.Allocation[2].Share != "0,50%" {
+		t.Errorf("распределение = %+v", v.Allocation)
+	}
+	if v.Today.Amount != v.DayChange || v.AllTime.Pct != v.IncomePct {
+		t.Errorf("Today/AllTime = %+v / %+v", v.Today, v.AllTime)
+	}
+	if sber.Ticker != "SBER" || sber.Value != "600 000 ₽" || sber.Name != "Сбер Банк" || sber.Class != "shares" {
 		t.Errorf("строка SBER = %+v", sber)
 	}
 	if sber.Price != "258,00 ₽" {
@@ -158,12 +169,17 @@ func TestBuildYieldViewRealty(t *testing.T) {
 	if v.IncomePct != "+14,13%" {
 		t.Errorf("IncomePct = %q, ожидалось +14,13%%", v.IncomePct)
 	}
+	// Полоса распределения: акции, недвижимость; золота и кеша нет — частей нет.
+	if len(v.Allocation) != 2 || v.Allocation[0].Class != "shares" || v.Allocation[1].Class != "realty" ||
+		v.Allocation[1].Width != "40.00" {
+		t.Errorf("распределение = %+v", v.Allocation)
+	}
 	found := false
 	for _, h := range v.Holdings {
 		// Тикер — код, название — короткое имя из справочника.
 		if h.Ticker == "RU000A1034U7" {
 			found = true
-			if h.Name != "Современный 7" || h.Share != "40,00%" {
+			if h.Name != "Современный 7" || h.Share != "40,00%" || h.Class != "realty" {
 				t.Errorf("строка фонда = %+v", h)
 			}
 		}

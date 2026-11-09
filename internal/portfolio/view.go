@@ -18,10 +18,18 @@ type YieldView struct {
 	DayChange    string // изменение за сегодня, рубли
 	DayChangePct string // изменение за сегодня, проценты
 	DayChangePos bool
-	Shares       AssetView
-	Gold         AssetView
-	Realty       AssetView
-	Holdings     []HoldingView
+	// Today/AllTime — те же изменение за день и доход за всё время, собранные
+	// для одного шаблона строки «сумма + процент».
+	Today   DeltaView
+	AllTime DeltaView
+	Shares  AssetView
+	Gold    AssetView
+	Realty  AssetView
+	Cash    AssetView
+	// Allocation — части полосы распределения (акции, недвижимость, золото,
+	// кеш) в порядке показа; классы с нулевой стоимостью пропущены.
+	Allocation []AssetView
+	Holdings   []HoldingView
 	// CanSync — показывать ли кнопку записи текущих значений в реестр. Ставится
 	// сервером: доступно, только если реестр сконфигурирован.
 	CanSync bool
@@ -30,10 +38,19 @@ type YieldView struct {
 	CanSyncPortfolio bool
 }
 
+// DeltaView — изменение: сумма, процент и знак (для цвета и стрелки).
+type DeltaView struct {
+	Amount string
+	Pct    string
+	Pos    bool
+}
+
 type AssetView struct {
+	Class    string // shares | realty | gold | cash — цвет класса на странице
 	Name     string
 	Value    string
 	Share    string // доля от базы (акции + золото + недвижимость + кеш)
+	Width    string // доля числом с точкой — ширина части полосы распределения, %
 	Yield    string // абсолютный доход
 	YieldPct string // относительная доходность
 	Positive bool
@@ -45,6 +62,7 @@ type AssetView struct {
 }
 
 type HoldingView struct {
+	Class          string // shares | realty | gold | cash, как у AssetView
 	Ticker         string
 	Name           string
 	Price          string // текущая цена за штуку («—» для золота и кеша)
@@ -84,13 +102,27 @@ func BuildYieldView(s *Snapshot, m *Meta, payouts Payouts, updated time.Time) Yi
 		DayChange:    signedMoney(s.DayChange),
 		DayChangePct: signedPct(s.DayChangePct),
 		DayChangePos: s.DayChange.Sign() >= 0,
-		Shares:       buildAsset("Акции", s.Shares, s.StockYield, base),
-		Gold:         buildAsset("Золото", s.Gold, s.GoldYield, base),
-		Realty:       buildAsset("Недвижимость", s.Realty, s.RealtyYield, base),
+		Shares:       buildAsset("shares", "Акции", s.Shares, s.StockYield, base),
+		Gold:         buildAsset("gold", "Золото", s.Gold, s.GoldYield, base),
+		Realty:       buildAsset("realty", "Недвижимость", s.Realty, s.RealtyYield, base),
+		Cash:         buildAsset("cash", "Кеш", s.Cash, tinvest.Dec{}, base),
 		Holdings:     buildHoldings(s, m),
 	}
+	v.Today = DeltaView{v.DayChange, v.DayChangePct, v.DayChangePos}
+	v.AllTime = DeltaView{v.Income, v.IncomePct, v.IncomePos}
 	v.Shares.withPayout("Дивиденды", payouts.Total.Sub(payouts.Rent))
 	v.Realty.withPayout("Рента", payouts.Rent)
+	// Полоса распределения: акции, недвижимость, золото, кеш — классы без
+	// стоимости не рисуются.
+	parts := []struct {
+		view  *AssetView
+		value tinvest.Dec
+	}{{&v.Shares, s.Shares}, {&v.Realty, s.Realty}, {&v.Gold, s.Gold}, {&v.Cash, s.Cash}}
+	for _, part := range parts {
+		if part.value.Sign() > 0 {
+			v.Allocation = append(v.Allocation, *part.view)
+		}
+	}
 	return v
 }
 
@@ -107,9 +139,18 @@ func buildHoldings(s *Snapshot, m *Meta) []HoldingView {
 	rows := make([]holdingRow, 0, len(s.Holdings)+len(s.RealtyHoldings)+2)
 	base := s.ShareBase() // доли строк — от акции + золото + недвижимость + кеш
 
-	for _, h := range append(append([]Holding{}, s.Holdings...), s.RealtyHoldings...) {
+	classes := make([]string, 0, len(s.Holdings)+len(s.RealtyHoldings))
+	for range s.Holdings {
+		classes = append(classes, "shares")
+	}
+	for range s.RealtyHoldings {
+		classes = append(classes, "realty")
+	}
+	for i, h := range append(append([]Holding{}, s.Holdings...), s.RealtyHoldings...) {
 		ticker, name := HoldingLabel(&h, m)
+		class := classes[i]
 		rows = append(rows, holdingRow{h.DayChange, HoldingView{
+			Class:          class,
 			Ticker:         ticker,
 			Name:           name,
 			Price:          price(h.Price),
@@ -127,6 +168,7 @@ func buildHoldings(s *Snapshot, m *Meta) []HoldingView {
 
 	if !s.Gold.IsZero() {
 		rows = append(rows, holdingRow{s.GoldDayChange, HoldingView{
+			Class:          "gold",
 			Ticker:         "GLDRUB_TOM",
 			Name:           "Золото",
 			Price:          dash,
@@ -149,6 +191,7 @@ func buildHoldings(s *Snapshot, m *Meta) []HoldingView {
 		// сортируем как нулевой.
 		var zero tinvest.Dec
 		rows = append(rows, holdingRow{zero, HoldingView{
+			Class:          "cash",
 			Ticker:         "RUB",
 			Name:           "Кеш",
 			Price:          dash,
@@ -197,11 +240,13 @@ func (a *AssetView) withPayout(label string, d tinvest.Dec) {
 
 // buildAsset собирает карточку класса активов. Доходность считается к вложенному
 // (стоимость − доход), как в приложении Т-Банка.
-func buildAsset(name string, value, yield, total tinvest.Dec) AssetView {
+func buildAsset(class, name string, value, yield, total tinvest.Dec) AssetView {
 	return AssetView{
+		Class:    class,
 		Name:     name,
 		Value:    money(value),
 		Share:    pct(value.Percent(total)),
+		Width:    sortKey(value.Percent(total)),
 		Yield:    signedMoney(yield),
 		YieldPct: signedPct(yield.Percent(value.Sub(yield))),
 		Positive: yield.Sign() >= 0,

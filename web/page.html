@@ -6,66 +6,153 @@
 <meta http-equiv="refresh" content="60">
 <title>Портфель</title>
 <style>
-  :root { color-scheme: light dark; }
+  /* Токены: цвета задаются по роли, тёмная тема — свои шаги тех же оттенков. */
+  :root {
+    color-scheme: light dark;
+    --bg: #f4f5f7;
+    --surface: #ffffff;
+    --border: #e6e8ec;
+    --row-hover: #f7f8fa;
+    --text: #15171a;
+    --text-2: #5b6170;
+    --text-3: #8a909c;
+    --pos: #0f7d36;
+    --neg: #c4302b;
+    --pos-bg: rgba(15, 125, 54, .09);
+    --neg-bg: rgba(196, 48, 43, .09);
+    --track: #eceef2;
+    /* Классы активов: порядок и шаги проверены на различимость (в т.ч. при
+       дальтонизме); подписи у частей всегда есть, цвет не единственный признак. */
+    --c-shares: #2a78d6;
+    --c-realty: #1baf7a;
+    --c-gold: #eda100;
+    --c-cash: #6250d6;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #121417;
+      --surface: #1b1e23;
+      --border: #2a2e35;
+      --row-hover: #22262c;
+      --text: #e8eaed;
+      --text-2: #a3a9b4;
+      --text-3: #767d89;
+      --pos: #4cc77a;
+      --neg: #f2726c;
+      --pos-bg: rgba(76, 199, 122, .12);
+      --neg-bg: rgba(242, 114, 108, .12);
+      --track: #2a2e35;
+      --c-shares: #3987e5;
+      --c-realty: #199e70;
+      --c-gold: #c98500;
+      --c-cash: #9085e9;
+    }
+  }
+
   * { box-sizing: border-box; }
   body {
-    margin: 0; padding: 24px; line-height: 1.4;
+    margin: 0; padding: 28px 24px 40px; line-height: 1.4;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    background: #f5f6f8; color: #1a1c1e;
+    background: var(--bg); color: var(--text);
+    -webkit-font-smoothing: antialiased;
   }
-  .wrap { max-width: 1080px; margin: 0 auto; }
-  h1 { font-size: 20px; margin: 0 0 2px; font-weight: 600; }
-  .muted { color: #6b7280; font-size: 13px; }
-  /* Четыре карточки (Всего + три класса) в один ряд на десктопе. */
-  .hero { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; margin: 20px 0; }
-  .card { background: #fff; border: 1px solid #e5e7eb; border-radius: 14px; padding: 18px 20px; }
-  .label { font-size: 13px; color: #6b7280; margin-bottom: 6px; }
-  .big { font-size: 26px; font-weight: 650; letter-spacing: -0.5px; }
-  .sub { font-size: 14px; margin-top: 4px; }
-  .pos { color: #128a3c; }
-  .neg { color: #c02626; }
-  .total .big { margin-bottom: 10px; }
-  .row .k { white-space: nowrap; margin-right: 8px; }
-  .row > span:last-child { text-align: right; }
-  .total .amt, .total .pct { white-space: nowrap; }
-  .total .pct { font-size: 12px; opacity: .8; margin-left: 4px; }
-  .card .sep { border-top: 1px solid #eceef1; margin: 6px 0 3px; }
-  .asset .name { font-weight: 600; margin-bottom: 10px; }
-  .row { display: flex; justify-content: space-between; font-size: 14px; padding: 3px 0; }
-  .row .k { color: #6b7280; }
-  .table-wrap { overflow-x: auto; }
-  table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 14px; }
-  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid #eceef1; white-space: nowrap; }
-  th { color: #6b7280; font-weight: 500; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
-  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
-  th.sortable { cursor: pointer; user-select: none; }
-  th.sortable:hover { color: inherit; }
-  th.sortable::after { content: "↕"; margin-left: 4px; opacity: .35; }
-  th.sortable[data-dir="desc"]::after { content: "↓"; opacity: 1; }
-  th.sortable[data-dir="asc"]::after { content: "↑"; opacity: 1; }
-  .section-title { font-size: 13px; color: #6b7280; margin: 22px 0 8px; text-transform: uppercase; letter-spacing: .04em; }
-  .top { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; }
+  .wrap { max-width: 1120px; margin: 0 auto; }
+  .num, .money { font-variant-numeric: tabular-nums; }
+  .pos { color: var(--pos); }
+  .neg { color: var(--neg); }
+
+  /* Шапка */
+  .top { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; margin-bottom: 20px; }
+  h1 { font-size: 22px; margin: 0; font-weight: 650; letter-spacing: -.3px; }
+  .updated { color: var(--text-3); font-size: 13px; margin-top: 2px; }
   .actions { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
   .btns { display: flex; gap: 8px; flex-wrap: wrap; }
   button {
     font: inherit; font-size: 13px; font-weight: 500; cursor: pointer;
-    color: inherit; background: transparent; border: 1px solid #d1d5db; border-radius: 8px; padding: 6px 12px;
+    color: var(--text); background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; padding: 6px 12px;
   }
-  button:hover { background: rgba(127,127,127,.1); }
+  button:hover { border-color: var(--text-3); }
   button:disabled { opacity: .6; cursor: default; }
-  #sync-status { font-size: 12px; color: #6b7280; min-height: 1em; }
-  @media (max-width: 900px) { .hero { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-  @media (max-width: 560px) {
-    body { padding: 16px; } .hero { grid-template-columns: 1fr; }
-    .actions { align-items: flex-start; }
+  #sync-status { font-size: 12px; color: var(--text-3); min-height: 1em; }
+
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; }
+  .label { font-size: 13px; color: var(--text-2); }
+
+  /* Сводка: итог слева, распределение справа */
+  .summary { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 32px; padding: 22px 24px; }
+  .hero { font-size: 40px; font-weight: 650; letter-spacing: -1px; line-height: 1.1; margin: 4px 0 16px; }
+  .stats { display: flex; gap: 12px 28px; flex-wrap: wrap; }
+  .stat .label { margin-bottom: 4px; }
+  .delta { display: inline-flex; align-items: baseline; gap: 6px; font-size: 17px; font-weight: 600; white-space: nowrap; }
+  .delta .arrow { font-size: 12px; }
+  .chip { font-size: 12px; font-weight: 600; padding: 2px 7px; border-radius: 999px; }
+  .chip.pos { background: var(--pos-bg); }
+  .chip.neg { background: var(--neg-bg); }
+
+  .alloc .label { margin-bottom: 12px; }
+  .bar { display: flex; gap: 2px; height: 10px; border-radius: 999px; overflow: hidden; background: var(--track); }
+  .bar span { display: block; height: 100%; min-width: 2px; }
+  .legend { list-style: none; margin: 14px 0 0; padding: 0; display: grid; gap: 8px; }
+  .legend li { display: grid; grid-template-columns: 10px minmax(0, 1fr) auto auto; gap: 10px; align-items: center; font-size: 14px; }
+  .legend .share { font-weight: 600; min-width: 56px; text-align: right; }
+  .legend .value { color: var(--text-2); min-width: 110px; text-align: right; }
+  .dot { width: 10px; height: 10px; border-radius: 3px; display: inline-block; flex: none; }
+  .shares { --c: var(--c-shares); } .realty { --c: var(--c-realty); }
+  .gold { --c: var(--c-gold); } .cash { --c: var(--c-cash); }
+  .dot, .bar span { background: var(--c); }
+
+  /* Карточки классов */
+  .classes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin: 16px 0 28px; }
+  .asset { padding: 18px 20px; }
+  .asset-head { display: flex; align-items: center; gap: 8px; font-weight: 600; }
+  .asset-head .share { margin-left: auto; color: var(--text-2); font-weight: 500; font-size: 13px; }
+  .asset-value { font-size: 24px; font-weight: 650; letter-spacing: -.4px; margin: 8px 0 10px; }
+  .row { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; font-size: 14px; padding: 4px 0; }
+  .row .k { color: var(--text-2); white-space: nowrap; }
+  .row .v { white-space: nowrap; text-align: right; }
+  .row .v .chip { margin-left: 6px; }
+  .row.payout { border-top: 1px solid var(--border); margin-top: 6px; padding-top: 10px; }
+
+  /* Состав */
+  .section-head { display: flex; align-items: baseline; gap: 8px; margin: 0 0 10px; }
+  .section-head h2 { font-size: 17px; font-weight: 650; margin: 0; }
+  .section-head .count { color: var(--text-3); font-size: 13px; }
+  .table-card { overflow: hidden; }
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: left; padding: 11px 16px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr:hover td { background: var(--row-hover); }
+  th { color: var(--text-3); font-weight: 500; font-size: 12px; background: var(--surface); }
+  td.num, th.num { text-align: right; }
+  .sec { display: flex; align-items: center; gap: 10px; }
+  .sec .t { font-weight: 600; }
+  .sec-text { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
+  .sec .n { color: var(--text-2); font-size: 13px; overflow: hidden; text-overflow: ellipsis; max-width: 260px; }
+  th.sortable { cursor: pointer; user-select: none; }
+  th.sortable:hover { color: var(--text); }
+  th.sortable::after { content: "↕"; margin-left: 4px; opacity: .35; }
+  th.sortable[data-dir="desc"]::after { content: "↓"; opacity: 1; }
+  th.sortable[data-dir="asc"]::after { content: "↑"; opacity: 1; }
+  th.sortable[data-dir] { color: var(--text); }
+
+  @media (max-width: 900px) {
+    .summary { grid-template-columns: 1fr; gap: 24px; }
+    .classes { grid-template-columns: 1fr; }
   }
-  @media (prefers-color-scheme: dark) {
-    body { background: #16181c; color: #e6e8eb; }
-    .card { background: #1f2227; border-color: #2c3036; }
-    .muted, .label, .row .k, th, .section-title, #sync-status { color: #9aa1ab; }
-    button { border-color: #3a3f46; }
-    th, td, .card .sep { border-color: #2c3036; }
-    .pos { color: #4ade80; } .neg { color: #f87171; }
+  @media (max-width: 560px) {
+    body { padding: 20px 16px 32px; }
+    .actions { align-items: flex-start; }
+    .summary { padding: 18px; }
+    .hero { font-size: 34px; }
+    .legend .value { display: none; }
+    .hide-sm { display: none; }
+    th, td { padding: 10px 12px; }
+    .sec { align-items: flex-start; }
+    .sec .dot { margin-top: 5px; }
+    .sec-text { display: flex; flex-direction: column; }
+    .sec .n { max-width: 130px; font-size: 12px; }
   }
 </style>
 </head>
@@ -74,7 +161,7 @@
   <header class="top">
     <div>
       <h1>Портфель</h1>
-      <div class="muted">обновлено {{.Updated}}</div>
+      <div class="updated">обновлено {{.Updated}}</div>
     </div>
     {{if or .CanSync .CanSyncPortfolio}}
     <div class="actions">
@@ -87,24 +174,47 @@
     {{end}}
   </header>
 
-  <div class="hero">
-    <div class="card total">
+  <section class="card summary">
+    <div>
       <div class="label">Всего</div>
-      <div class="big">{{.Total}}</div>
-      <div class="row"><span class="k">За сегодня</span><span class="{{if .DayChangePos}}pos{{else}}neg{{end}}"><span class="amt">{{.DayChange}}</span> <span class="pct">{{.DayChangePct}}</span></span></div>
-      <div class="row"><span class="k">За всё время</span><span class="{{if .IncomePos}}pos{{else}}neg{{end}}"><span class="amt">{{.Income}}</span> <span class="pct">{{.IncomePct}}</span></span></div>
+      <div class="hero money">{{.Total}}</div>
+      <div class="stats">
+        <div class="stat">
+          <div class="label">За сегодня</div>
+          {{template "delta" .Today}}
+        </div>
+        <div class="stat">
+          <div class="label">За всё время</div>
+          {{template "delta" .AllTime}}
+        </div>
+      </div>
     </div>
+    <div class="alloc">
+      <div class="label">Распределение</div>
+      <div class="bar" role="img" aria-label="Распределение:{{range .Allocation}} {{.Name}} {{.Share}};{{end}}">
+        {{range .Allocation}}<span class="{{.Class}}" style="width: {{.Width}}%" title="{{.Name}} — {{.Share}}, {{.Value}}"></span>{{end}}
+      </div>
+      <ul class="legend">
+        {{range .Allocation}}
+        <li><span class="dot {{.Class}}"></span><span>{{.Name}}</span><span class="share num">{{.Share}}</span><span class="value money">{{.Value}}</span></li>
+        {{end}}
+      </ul>
+    </div>
+  </section>
+
+  <div class="classes">
     {{template "asset" .Shares}}
     {{template "asset" .Realty}}
     {{template "asset" .Gold}}
   </div>
 
-  <div class="section-title">Состав</div>
+  <div class="section-head"><h2>Состав</h2><span class="count">{{len .Holdings}}</span></div>
+  <div class="card table-card">
   <div class="table-wrap">
   <table id="holdings">
     <thead><tr>
-      <th>Тикер</th><th>Название</th>
-      <th class="num">Цена</th><th class="num">Стоимость</th>
+      <th>Бумага</th>
+      <th class="num hide-sm">Цена</th><th class="num">Стоимость</th>
       <th class="num sortable" data-key="share">Доля</th>
       <th class="num sortable" data-key="yield">За всё время</th>
       <th class="num sortable" data-key="day" data-dir="desc">За сегодня</th>
@@ -112,14 +222,17 @@
     <tbody>
       {{range .Holdings}}
       <tr data-share="{{.ShareKey}}" data-yield="{{.YieldKey}}" data-day="{{.DayChangeKey}}">
-        <td>{{.Ticker}}</td><td>{{.Name}}</td>
-        <td class="num">{{.Price}}</td><td class="num">{{.Value}}</td><td class="num">{{.Share}}</td>
+        <td><div class="sec"><span class="dot {{.Class}}"></span><span class="sec-text"><span class="t">{{.Ticker}}</span>{{if .Name}}<span class="n">{{.Name}}</span>{{end}}</span></div></td>
+        <td class="num hide-sm">{{.Price}}</td>
+        <td class="num">{{.Value}}</td>
+        <td class="num">{{.Share}}</td>
         <td class="num {{.YieldClass}}">{{.Yield}}</td>
         <td class="num {{.DayChangeClass}}">{{.DayChange}}</td>
       </tr>
       {{end}}
     </tbody>
   </table>
+  </div>
   </div>
 </div>
 <script>
@@ -171,14 +284,14 @@
 {{end}}
 </body>
 </html>
+{{define "delta"}}
+<div class="delta {{if .Pos}}pos{{else}}neg{{end}}"><span class="arrow">{{if .Pos}}▲{{else}}▼{{end}}</span><span class="money">{{.Amount}}</span><span class="chip {{if .Pos}}pos{{else}}neg{{end}}">{{.Pct}}</span></div>
+{{end}}
 {{define "asset"}}
 <div class="card asset">
-  <div class="name">{{.Name}}</div>
-  <div class="row"><span class="k">Стоимость</span><span>{{.Value}}</span></div>
-  <div class="row"><span class="k">Доля</span><span>{{.Share}}</span></div>
-  <div class="row"><span class="k">Доход</span><span class="{{if .Positive}}pos{{else}}neg{{end}}">{{.Yield}}</span></div>
-  <div class="row"><span class="k">Доходность</span><span class="{{if .Positive}}pos{{else}}neg{{end}}">{{.YieldPct}}</span></div>
-  {{if .PayoutLabel}}<div class="sep"></div>
-  <div class="row"><span class="k">{{.PayoutLabel}}</span><span class="{{if .PayoutPos}}pos{{else}}neg{{end}}">{{.Payout}}</span></div>{{end}}
+  <div class="asset-head"><span class="dot {{.Class}}"></span>{{.Name}}<span class="share">{{.Share}}</span></div>
+  <div class="asset-value money">{{.Value}}</div>
+  <div class="row"><span class="k">Доход</span><span class="v {{if .Positive}}pos{{else}}neg{{end}}"><span class="money">{{.Yield}}</span><span class="chip {{if .Positive}}pos{{else}}neg{{end}}">{{.YieldPct}}</span></span></div>
+  {{if .PayoutLabel}}<div class="row payout"><span class="k">{{.PayoutLabel}}</span><span class="v money {{if .PayoutPos}}pos{{else}}neg{{end}}">{{.Payout}}</span></div>{{end}}
 </div>
 {{end}}
