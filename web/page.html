@@ -292,6 +292,7 @@
   <div class="asset-head"><span class="dot {{.Class}}"></span>{{.Name}}<span class="share">{{.Share}}</span></div>
   <div class="asset-value money">{{.Value}}</div>
   <div class="row"><span class="k">Доход</span><span class="v {{if .Positive}}pos{{else}}neg{{end}}"><span class="money">{{.Yield}}</span><span class="chip {{if .Positive}}pos{{else}}neg{{end}}">{{.YieldPct}}</span></span></div>
+  <div class="row"><span class="k">За сегодня</span><span class="v {{if .Today.Pos}}pos{{else}}neg{{end}}"><span class="money">{{.Today.Amount}}</span><span class="chip {{if .Today.Pos}}pos{{else}}neg{{end}}">{{.Today.Pct}}</span></span></div>
   {{if .PayoutLabel}}<div class="row payout"><span class="k">{{.PayoutLabel}}</span><span class="v money {{if .PayoutPos}}pos{{else}}neg{{end}}">{{.Payout}}</span></div>{{end}}
 </div>
 {{end}}

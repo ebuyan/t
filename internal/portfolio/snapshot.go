@@ -61,6 +61,9 @@ type Snapshot struct {
 	RealtyYield tinvest.Dec
 	// GoldDayChange — изменение по золоту за сегодня (для строки золота в составе).
 	GoldDayChange tinvest.Dec
+	// GoldPrice — цена грамма золота (для строки золота в составе); берётся от
+	// первой позиции золота, у которой цена есть.
+	GoldPrice tinvest.Dec
 	// Cash — свободные средства (валютные позиции кроме золота, в рублях). Растёт,
 	// когда приходят дивиденды, — видно строкой в составе.
 	Cash tinvest.Dec

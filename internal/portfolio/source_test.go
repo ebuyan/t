@@ -56,12 +56,14 @@ func TestBuildSnapshotMixedSources(t *testing.T) {
 		},
 	}
 
+	tbank.Positions[1].Price = dec(t, "9500") // цена грамма золота — в строку золота
 	s := buildSnapshot(time.Date(2026, 9, 24, 12, 0, 0, 0, time.UTC), []*SourcePortfolio{tbank, fin})
 
 	checks := map[string][2]string{
 		"Shares":         {s.Shares.String(0), "700000"},
 		"StockYield":     {s.StockYield.String(0), "65000"},
 		"Gold":           {s.Gold.String(0), "200000"},
+		"GoldPrice":      {s.GoldPrice.String(0), "9500"},
 		"Realty":         {s.Realty.String(0), "400000"},
 		"RealtyYield":    {s.RealtyYield.String(0), "-8000"},
 		"Cash":           {s.Cash.String(0), "87000"}, // рубли 50 000 + LQDT 30 000 + кеш Финама 7 000

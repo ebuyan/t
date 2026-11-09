@@ -151,6 +151,9 @@ func (s *Snapshot) addPosition(p *Position) {
 		s.Gold = s.Gold.Add(p.Value)
 		s.GoldYield = s.GoldYield.Add(p.Yield)
 		s.GoldDayChange = s.GoldDayChange.Add(p.DayChange)
+		if s.GoldPrice.IsZero() {
+			s.GoldPrice = p.Price
+		}
 	case classCash:
 		s.Cash = s.Cash.Add(p.Value)
 	case classShares:

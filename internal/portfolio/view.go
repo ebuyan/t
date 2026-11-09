@@ -59,13 +59,16 @@ type AssetView struct {
 	PayoutLabel string
 	Payout      string
 	PayoutPos   bool
+	// Today — изменение класса за сегодня: сумма и процент к стоимости на
+	// начало дня.
+	Today DeltaView
 }
 
 type HoldingView struct {
 	Class          string // shares | realty | gold | cash, как у AssetView
 	Ticker         string
 	Name           string
-	Price          string // текущая цена за штуку («—» для золота и кеша)
+	Price          string // текущая цена за штуку («—» у кеша и у золота без цены)
 	Value          string
 	Share          string
 	Yield          string // за всё время
@@ -108,6 +111,9 @@ func BuildYieldView(s *Snapshot, m *Meta, payouts Payouts, updated time.Time) Yi
 		Cash:         buildAsset("cash", "Кеш", s.Cash, tinvest.Dec{}, base),
 		Holdings:     buildHoldings(s, m),
 	}
+	v.Shares.Today = classToday(s.Shares, sumDayChange(s.Holdings))
+	v.Realty.Today = classToday(s.Realty, sumDayChange(s.RealtyHoldings))
+	v.Gold.Today = classToday(s.Gold, s.GoldDayChange)
 	v.Today = DeltaView{v.DayChange, v.DayChangePct, v.DayChangePos}
 	v.AllTime = DeltaView{v.Income, v.IncomePct, v.IncomePos}
 	v.Shares.withPayout("Дивиденды", payouts.Total.Sub(payouts.Rent))
@@ -171,7 +177,7 @@ func buildHoldings(s *Snapshot, m *Meta) []HoldingView {
 			Class:          "gold",
 			Ticker:         "GLDRUB_TOM",
 			Name:           "Золото",
-			Price:          dash,
+			Price:          goldPrice(s.GoldPrice),
 			Value:          money(s.Gold),
 			Share:          pct(s.Gold.Percent(base)),
 			Yield:          signedMoney(s.GoldYield),
@@ -187,8 +193,8 @@ func buildHoldings(s *Snapshot, m *Meta) []HoldingView {
 	if !s.Cash.IsZero() {
 		// Кеш: доля от той же базы (входит в 100%); доходности нет — по сумме
 		// видно приход дивидендов.
-		// Изменения за сегодня у кеша нет — показываем нулём (зелёным) и
-		// сортируем как нулевой.
+		// Дохода и изменения за сегодня у кеша нет — показываем нулём
+		// (зелёным) и сортируем как нулевые.
 		var zero tinvest.Dec
 		rows = append(rows, holdingRow{zero, HoldingView{
 			Class:          "cash",
@@ -197,10 +203,12 @@ func buildHoldings(s *Snapshot, m *Meta) []HoldingView {
 			Price:          dash,
 			Value:          money(s.Cash),
 			Share:          pct(s.Cash.Percent(base)),
-			Yield:          dash,
+			Yield:          signedMoney(zero),
+			YieldClass:     signClass(zero),
 			DayChange:      signedMoney(zero),
 			DayChangeClass: signClass(zero),
 			ShareKey:       sortKey(s.Cash.Percent(base)),
+			YieldKey:       sortKey(zero),
 			DayChangeKey:   sortKey(zero),
 		}})
 	}
@@ -216,7 +224,7 @@ func buildHoldings(s *Snapshot, m *Meta) []HoldingView {
 	return views
 }
 
-// dash — прочерк в ячейках, где значения нет (цена/доля/доходность у кеша и т.п.).
+// dash — прочерк в ячейках, где значения нет (цена у кеша и т.п.).
 const dash = "—"
 
 // signClass возвращает CSS-класс подсветки по знаку: pos для неотрицательного,
@@ -226,6 +234,32 @@ func signClass(d tinvest.Dec) string {
 		return "neg"
 	}
 	return "pos"
+}
+
+// sumDayChange — изменение за сегодня по строкам состава класса.
+func sumDayChange(hs []Holding) tinvest.Dec {
+	var sum tinvest.Dec
+	for i := range hs {
+		sum = sum.Add(hs[i].DayChange)
+	}
+	return sum
+}
+
+// classToday — изменение класса за сегодня; процент — к стоимости на начало дня.
+func classToday(value, day tinvest.Dec) DeltaView {
+	return DeltaView{
+		Amount: signedMoney(day),
+		Pct:    signedPct(day.Percent(value.Sub(day))),
+		Pos:    day.Sign() >= 0,
+	}
+}
+
+// goldPrice — цена грамма золота; прочерк, если брокер её не отдал.
+func goldPrice(d tinvest.Dec) string {
+	if d.IsZero() {
+		return dash
+	}
+	return price(d)
 }
 
 // sortKey — ключ сортировки столбца: число с точкой, без разделителей тысяч.

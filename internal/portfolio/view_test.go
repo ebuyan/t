@@ -18,6 +18,7 @@ func TestBuildYieldView(t *testing.T) {
 		DayChange:      tinvest.DecUnits(12_000),
 		DayChangePct:   tinvest.DecUnits(1),
 		GoldDayChange:  tinvest.DecUnits(3_000),
+		GoldPrice:      tinvest.DecUnits(9_500),
 		Cash:           tinvest.DecUnits(7_500),
 		PortfolioValue: tinvest.DecUnits(1_507_500), // акции + золото + кеш
 		Holdings: []Holding{{
@@ -85,12 +86,24 @@ func TestBuildYieldView(t *testing.T) {
 	}
 	cash := v.Holdings[1]
 	// Кеш теперь с долей от той же базы: 7 500/1 507 500 = 0,50%.
-	if cash.Name != "Кеш" || cash.Value != "7 500 ₽" || cash.Share != "0,50%" || cash.Yield != "—" {
+	if cash.Name != "Кеш" || cash.Value != "7 500 ₽" || cash.Share != "0,50%" {
 		t.Errorf("строка кеша = %+v", cash)
 	}
-	// Изменение кеша за сегодня — ноль, зелёным; ключа доходности нет.
-	if cash.DayChange != "0 ₽" || cash.DayChangeClass != "pos" || cash.DayChangeKey != "0.00" || cash.YieldKey != "" {
-		t.Errorf("кеш за сегодня = %+v", cash)
+	// Доход и изменение кеша — нули, зелёным, сортируются как нулевые.
+	if cash.Yield != "0 ₽" || cash.YieldClass != "pos" || cash.YieldKey != "0.00" ||
+		cash.DayChange != "0 ₽" || cash.DayChangeClass != "pos" || cash.DayChangeKey != "0.00" {
+		t.Errorf("кеш = %+v", cash)
+	}
+	if gold.Price != "9 500,00 ₽" {
+		t.Errorf("цена золота = %q, ожидалось 9 500,00 ₽", gold.Price)
+	}
+	// За сегодня по классам: акции −2 000 к 1 002 000 на начало дня, золото
+	// +3 000 к 497 000.
+	if v.Shares.Today != (DeltaView{"-2 000 ₽", "-0,20%", false}) {
+		t.Errorf("Shares.Today = %+v", v.Shares.Today)
+	}
+	if v.Gold.Today != (DeltaView{"+3 000 ₽", "+0,60%", true}) {
+		t.Errorf("Gold.Today = %+v", v.Gold.Today)
 	}
 	sber := v.Holdings[2]
 	if gold.Class != "gold" || cash.Class != "cash" {
