@@ -84,7 +84,7 @@ func handleIndex(cfg Config) http.HandlerFunc {
 		m, _, _ := cfg.Cache.Meta()
 		divs, _, _ := cfg.Cache.Dividends()
 
-		view := portfolio.BuildYieldView(s, m, divs.Total, updated)
+		view := portfolio.BuildYieldView(s, m, divs, updated)
 		view.CanSync = cfg.SyncRegistry != nil
 		view.CanSyncPortfolio = cfg.SyncPortfolio != nil
 

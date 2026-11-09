@@ -31,7 +31,7 @@ func TestBuildYieldView(t *testing.T) {
 	}
 	m := &Meta{Names: map[string]string{"SBER": "Сбер Банк"}}
 
-	v := BuildYieldView(s, m, tinvest.DecUnits(20_000), s.Date)
+	v := BuildYieldView(s, m, Payouts{Total: tinvest.DecUnits(20_000)}, s.Date)
 
 	// «Всего» = полная стоимость портфеля (акции + золото + кеш), не база долей.
 	if v.Total != "1 507 500 ₽" {
@@ -46,15 +46,11 @@ func TestBuildYieldView(t *testing.T) {
 	if v.IncomePct != "+4,83%" {
 		t.Errorf("IncomePct = %q, ожидалось %q", v.IncomePct, "+4,83%")
 	}
-	if v.Dividends != "+20 000 ₽" || !v.HasDividends {
-		t.Errorf("Dividends = %q (has=%v), ожидалось %q", v.Dividends, v.HasDividends, "+20 000 ₽")
+	if v.Shares.PayoutLabel != "Дивиденды" || v.Shares.Payout != "+20 000 ₽" {
+		t.Errorf("дивиденды в карточке акций = %q %q", v.Shares.PayoutLabel, v.Shares.Payout)
 	}
 	if !v.IncomePos {
 		t.Error("IncomePos = false, ожидалось true")
-	}
-	// Без выплат строка дивидендов на странице не показывается.
-	if empty := BuildYieldView(s, m, tinvest.Dec{}, s.Date); empty.HasDividends {
-		t.Error("HasDividends = true при нулевых дивидендах")
 	}
 	if v.DayChange != "+12 000 ₽" {
 		t.Errorf("DayChange = %q, ожидалось %q", v.DayChange, "+12 000 ₽")
@@ -92,6 +88,10 @@ func TestBuildYieldView(t *testing.T) {
 	if cash.Name != "Кеш" || cash.Value != "7 500 ₽" || cash.Share != "0,50%" || cash.Yield != "—" {
 		t.Errorf("строка кеша = %+v", cash)
 	}
+	// Изменение кеша за сегодня — ноль, зелёным; ключа доходности нет.
+	if cash.DayChange != "0 ₽" || cash.DayChangeClass != "pos" || cash.DayChangeKey != "0.00" || cash.YieldKey != "" {
+		t.Errorf("кеш за сегодня = %+v", cash)
+	}
 	sber := v.Holdings[2]
 	if sber.Ticker != "SBER" || sber.Value != "600 000 ₽" || sber.Name != "Сбер Банк" {
 		t.Errorf("строка SBER = %+v", sber)
@@ -105,6 +105,10 @@ func TestBuildYieldView(t *testing.T) {
 	if sber.DayChange != "-2 000 ₽" || sber.DayChangeClass != "neg" {
 		t.Errorf("SBER за сегодня = %q (class=%q)", sber.DayChange, sber.DayChangeClass)
 	}
+	// Ключи сортировки — числа с точкой, без разделителей.
+	if sber.ShareKey != "39.80" || sber.YieldKey != "60000.00" || sber.DayChangeKey != "-2000.00" {
+		t.Errorf("SBER ключи сортировки = %q %q %q", sber.ShareKey, sber.YieldKey, sber.DayChangeKey)
+	}
 }
 
 // Без метаданных страница всё равно строится — просто без названий бумаг.
@@ -115,7 +119,7 @@ func TestBuildYieldViewNilMeta(t *testing.T) {
 		Shares:   tinvest.DecUnits(600_000),
 		Holdings: []Holding{{Ticker: "SBER", Value: tinvest.DecUnits(600_000), UID: "uid-sber"}},
 	}
-	v := BuildYieldView(s, nil, tinvest.Dec{}, s.Date)
+	v := BuildYieldView(s, nil, Payouts{}, s.Date)
 	if v.Holdings[0].Name != "" {
 		t.Errorf("без meta имя должно быть пустым, получили %q", v.Holdings[0].Name)
 	}
@@ -137,15 +141,22 @@ func TestBuildYieldViewRealty(t *testing.T) {
 	s.finish()
 	m := &Meta{}
 
-	v := BuildYieldView(s, m, tinvest.Dec{}, time.Now())
+	v := BuildYieldView(s, m, Payouts{Total: tinvest.DecUnits(50_000), Rent: tinvest.DecUnits(30_000)}, time.Now())
 
 	// База долей 1М: недвижимость 40%; доходность −20 000 к вложенным 420 000.
 	if v.Realty.Name != "Недвижимость" || v.Realty.Share != "40,00%" || v.Realty.YieldPct != "-4,76%" {
 		t.Errorf("карточка недвижимости = %+v", v.Realty)
 	}
-	// Доход +80 000 к вложенным 920 000 (1М − 80 000 переоценки).
-	if v.IncomePct != "+8,70%" {
-		t.Errorf("IncomePct = %q, ожидалось +8,70%%", v.IncomePct)
+	// Рента — в карточке недвижимости, дивиденды у акций — за вычетом ренты.
+	if v.Realty.PayoutLabel != "Рента" || v.Realty.Payout != "+30 000 ₽" {
+		t.Errorf("рента в карточке недвижимости = %q %q", v.Realty.PayoutLabel, v.Realty.Payout)
+	}
+	if v.Shares.Payout != "+20 000 ₽" {
+		t.Errorf("дивиденды в карточке акций = %q, ожидалось +20 000 ₽", v.Shares.Payout)
+	}
+	// Доход +80 000 переоценки + 50 000 выплат к вложенным 920 000.
+	if v.IncomePct != "+14,13%" {
+		t.Errorf("IncomePct = %q, ожидалось +14,13%%", v.IncomePct)
 	}
 	found := false
 	for _, h := range v.Holdings {

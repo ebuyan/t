@@ -22,7 +22,7 @@ func TestPageRenders(t *testing.T) {
 	}
 	m := &portfolio.Meta{Names: map[string]string{"SBER": "Сбер Банк"}}
 
-	view := portfolio.BuildYieldView(s, m, tinvest.DecUnits(20_000), s.Date)
+	view := portfolio.BuildYieldView(s, m, portfolio.Payouts{Total: tinvest.DecUnits(20_000)}, s.Date)
 	view.CanSync = true
 
 	var b strings.Builder
@@ -33,8 +33,8 @@ func TestPageRenders(t *testing.T) {
 	// html/template экранирует «+» как &#43; (в браузере — обычный «+»),
 	// поэтому сумму дохода ищем без ведущего знака.
 	for _, want := range []string{
-		"Портфель", "SBER", "Сбер Банк", "70 000 ₽", "66,67%", "в том числе дивиденды",
-		"Изменение за сегодня", "Цена", "За всё время", "За сегодня", "Золото", "Записать в реестр",
+		"Портфель", "SBER", "Сбер Банк", "70 000 ₽", "66,67%", "Дивиденды", "Рента",
+		"Всего", "data-key=\"day\"", "Цена", "За всё время", "За сегодня", "Золото", "Записать в реестр",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("в выводе нет %q", want)

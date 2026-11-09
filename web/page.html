@@ -16,14 +16,16 @@
   .wrap { max-width: 1080px; margin: 0 auto; }
   h1 { font-size: 20px; margin: 0 0 2px; font-weight: 600; }
   .muted { color: #6b7280; font-size: 13px; }
-  .hero { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin: 20px 0; }
+  /* Четыре карточки (Всего + три класса) в один ряд на десктопе. */
+  .hero { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; margin: 20px 0; }
   .card { background: #fff; border: 1px solid #e5e7eb; border-radius: 14px; padding: 18px 20px; }
   .label { font-size: 13px; color: #6b7280; margin-bottom: 6px; }
   .big { font-size: 26px; font-weight: 650; letter-spacing: -0.5px; }
   .sub { font-size: 14px; margin-top: 4px; }
   .pos { color: #128a3c; }
   .neg { color: #c02626; }
-  .grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
+  .total .big { margin-bottom: 10px; }
+  .card .sep { border-top: 1px solid #eceef1; margin: 6px 0 3px; }
   .asset .name { font-weight: 600; margin-bottom: 10px; }
   .row { display: flex; justify-content: space-between; font-size: 14px; padding: 3px 0; }
   .row .k { color: #6b7280; }
@@ -32,6 +34,11 @@
   th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid #eceef1; white-space: nowrap; }
   th { color: #6b7280; font-weight: 500; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
   td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  th.sortable { cursor: pointer; user-select: none; }
+  th.sortable:hover { color: inherit; }
+  th.sortable::after { content: "↕"; margin-left: 4px; opacity: .35; }
+  th.sortable[data-dir="desc"]::after { content: "↓"; opacity: 1; }
+  th.sortable[data-dir="asc"]::after { content: "↑"; opacity: 1; }
   .section-title { font-size: 13px; color: #6b7280; margin: 22px 0 8px; text-transform: uppercase; letter-spacing: .04em; }
   .actions { display: flex; align-items: center; gap: 12px; margin: 20px 0 4px; }
   button {
@@ -41,12 +48,13 @@
   button:hover { background: #1d4ed8; }
   button:disabled { opacity: .6; cursor: default; }
   #sync-status { font-size: 13px; color: #6b7280; }
-  @media (max-width: 560px) { .hero, .grid2 { grid-template-columns: 1fr; } }
+  @media (max-width: 900px) { .hero { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @media (max-width: 560px) { body { padding: 16px; } .hero { grid-template-columns: 1fr; } }
   @media (prefers-color-scheme: dark) {
     body { background: #16181c; color: #e6e8eb; }
     .card { background: #1f2227; border-color: #2c3036; }
     .muted, .label, .row .k, th, .section-title { color: #9aa1ab; }
-    th, td { border-color: #2c3036; }
+    th, td, .card .sep { border-color: #2c3036; }
     .pos { color: #4ade80; } .neg { color: #f87171; }
   }
 </style>
@@ -57,24 +65,14 @@
   <div class="muted">обновлено {{.Updated}}</div>
 
   <div class="hero">
-    <div class="card">
+    <div class="card total">
       <div class="label">Всего</div>
       <div class="big">{{.Total}}</div>
+      <div class="row"><span class="k">За сегодня</span><span class="{{if .DayChangePos}}pos{{else}}neg{{end}}">{{.DayChange}}</span></div>
+      <div class="row"><span class="k"></span><span class="{{if .DayChangePos}}pos{{else}}neg{{end}}">{{.DayChangePct}}</span></div>
+      <div class="row"><span class="k">За всё время</span><span class="{{if .IncomePos}}pos{{else}}neg{{end}}">{{.Income}}</span></div>
+      <div class="row"><span class="k"></span><span class="{{if .IncomePos}}pos{{else}}neg{{end}}">{{.IncomePct}}</span></div>
     </div>
-    <div class="card">
-      <div class="label">Изменение за сегодня</div>
-      <div class="big {{if .DayChangePos}}pos{{else}}neg{{end}}">{{.DayChange}}</div>
-      <div class="sub {{if .DayChangePos}}pos{{else}}neg{{end}}">{{.DayChangePct}}</div>
-    </div>
-    <div class="card">
-      <div class="label">Доход за всё время</div>
-      <div class="big {{if .IncomePos}}pos{{else}}neg{{end}}">{{.Income}}</div>
-      <div class="sub {{if .IncomePos}}pos{{else}}neg{{end}}">{{.IncomePct}}</div>
-      {{if .HasDividends}}<div class="sub muted">в том числе дивиденды {{.Dividends}}</div>{{end}}
-    </div>
-  </div>
-
-  <div class="grid2">
     {{template "asset" .Shares}}
     {{template "asset" .Gold}}
     {{template "asset" .Realty}}
@@ -90,15 +88,17 @@
 
   <div class="section-title">Состав</div>
   <div class="table-wrap">
-  <table>
+  <table id="holdings">
     <thead><tr>
       <th>Тикер</th><th>Название</th>
-      <th class="num">Цена</th><th class="num">Стоимость</th><th class="num">Доля</th>
-      <th class="num">За всё время</th><th class="num">За сегодня</th>
+      <th class="num">Цена</th><th class="num">Стоимость</th>
+      <th class="num sortable" data-key="share">Доля</th>
+      <th class="num sortable" data-key="yield">За всё время</th>
+      <th class="num sortable" data-key="day" data-dir="desc">За сегодня</th>
     </tr></thead>
     <tbody>
       {{range .Holdings}}
-      <tr>
+      <tr data-share="{{.ShareKey}}" data-yield="{{.YieldKey}}" data-day="{{.DayChangeKey}}">
         <td>{{.Ticker}}</td><td>{{.Name}}</td>
         <td class="num">{{.Price}}</td><td class="num">{{.Value}}</td><td class="num">{{.Share}}</td>
         <td class="num {{.YieldClass}}">{{.Yield}}</td>
@@ -109,6 +109,34 @@
   </table>
   </div>
 </div>
+<script>
+  // Сортировка состава по клику на заголовок: первый клик — по убыванию,
+  // повторный — по возрастанию. Строки без значения (пустой ключ) всегда внизу.
+  (function () {
+    var table = document.getElementById('holdings');
+    if (!table) return;
+    var heads = table.querySelectorAll('th.sortable');
+    var body = table.tBodies[0];
+    heads.forEach(function (th) {
+      th.addEventListener('click', function () {
+        var key = th.dataset.key;
+        var dir = th.dataset.dir === 'desc' ? 'asc' : 'desc';
+        heads.forEach(function (h) { delete h.dataset.dir; });
+        th.dataset.dir = dir;
+        var rows = Array.prototype.slice.call(body.rows);
+        rows.sort(function (a, b) {
+          var x = a.dataset[key], y = b.dataset[key];
+          if (x === '' && y === '') return 0;
+          if (x === '') return 1;
+          if (y === '') return -1;
+          var d = parseFloat(x) - parseFloat(y);
+          return dir === 'desc' ? -d : d;
+        });
+        rows.forEach(function (r) { body.appendChild(r); });
+      });
+    });
+  })();
+</script>
 {{if or .CanSync .CanSyncPortfolio}}
 <script>
   function wireSync(btnId, url, pending) {
@@ -137,5 +165,7 @@
   <div class="row"><span class="k">Доля</span><span>{{.Share}}</span></div>
   <div class="row"><span class="k">Доход</span><span class="{{if .Positive}}pos{{else}}neg{{end}}">{{.Yield}}</span></div>
   <div class="row"><span class="k">Доходность</span><span class="{{if .Positive}}pos{{else}}neg{{end}}">{{.YieldPct}}</span></div>
+  {{if .PayoutLabel}}<div class="sep"></div>
+  <div class="row"><span class="k">{{.PayoutLabel}}</span><span class="{{if .PayoutPos}}pos{{else}}neg{{end}}">{{.Payout}}</span></div>{{end}}
 </div>
 {{end}}

@@ -10,15 +10,11 @@ import (
 // YieldView — модель веб-страницы доходности: всё уже отформатировано в строки,
 // чтобы шаблон в пакете web ничего не считал.
 type YieldView struct {
-	Updated   string
-	Total     string // полная стоимость портфеля (акции + золото + кеш)
-	Income    string // доход за всё время: переоценка позиций плюс дивиденды
-	IncomePct string // относительная доходность
-	IncomePos bool
-	// Dividends — полученные за всё время выплаты, отдельной строкой в карточке
-	// дохода. HasDividends — показывать ли строку (нет выплат — нет строки).
-	Dividends    string
-	HasDividends bool
+	Updated      string
+	Total        string // полная стоимость портфеля (акции + золото + кеш)
+	Income       string // доход за всё время: переоценка позиций плюс дивиденды
+	IncomePct    string // относительная доходность
+	IncomePos    bool
 	DayChange    string // изменение за сегодня, рубли
 	DayChangePct string // изменение за сегодня, проценты
 	DayChangePos bool
@@ -41,6 +37,11 @@ type AssetView struct {
 	Yield    string // абсолютный доход
 	YieldPct string // относительная доходность
 	Positive bool
+	// PayoutLabel/Payout — строка полученных выплат в карточке класса
+	// («Дивиденды» у акций, «Рента» у недвижимости); пустая подпись — строки нет.
+	PayoutLabel string
+	Payout      string
+	PayoutPos   bool
 }
 
 type HoldingView struct {
@@ -53,15 +54,21 @@ type HoldingView struct {
 	YieldClass     string // pos | neg | "" (нейтрально, для «—»)
 	DayChange      string // за сегодня
 	DayChangeClass string
+	// Ключи сортировки столбцов на странице — числа строкой (точка, без
+	// разделителей); пустой ключ — значения нет, такая строка уходит в конец.
+	ShareKey     string
+	YieldKey     string
+	DayChangeKey string
 }
 
 // BuildYieldView строит модель страницы из среза. Названия бумаг берутся из meta
 // (может быть nil — тогда показываем только тикеры): на странице это не критично.
-// dividends — полученные за всё время выплаты; в доходность позиций они не входят,
-// поэтому прибавляются к доходу отдельно.
-func BuildYieldView(s *Snapshot, m *Meta, dividends tinvest.Dec, updated time.Time) YieldView {
+// payouts — полученные за всё время выплаты; в доходность позиций они не входят,
+// поэтому прибавляются к доходу отдельно. В карточках классов выплаты разнесены:
+// рента (по паям недвижимости) — у недвижимости, остальное — дивиденды у акций.
+func BuildYieldView(s *Snapshot, m *Meta, payouts Payouts, updated time.Time) YieldView {
 	yield := s.Yield() // переоценка позиций, без выплат
-	income := yield.Add(dividends)
+	income := yield.Add(payouts.Total)
 	base := s.ShareBase() // доли считаем от акции + золото + недвижимость + кеш
 
 	v := YieldView{
@@ -74,8 +81,6 @@ func BuildYieldView(s *Snapshot, m *Meta, dividends tinvest.Dec, updated time.Ti
 		// переоценки, а не от полного дохода.
 		IncomePct:    signedPct(income.Percent(s.Total.Sub(yield))),
 		IncomePos:    income.Sign() >= 0,
-		Dividends:    signedMoney(dividends),
-		HasDividends: !dividends.IsZero(),
 		DayChange:    signedMoney(s.DayChange),
 		DayChangePct: signedPct(s.DayChangePct),
 		DayChangePos: s.DayChange.Sign() >= 0,
@@ -84,6 +89,8 @@ func BuildYieldView(s *Snapshot, m *Meta, dividends tinvest.Dec, updated time.Ti
 		Realty:       buildAsset("Недвижимость", s.Realty, s.RealtyYield, base),
 		Holdings:     buildHoldings(s, m),
 	}
+	v.Shares.withPayout("Дивиденды", payouts.Total.Sub(payouts.Rent))
+	v.Realty.withPayout("Рента", payouts.Rent)
 	return v
 }
 
@@ -112,6 +119,9 @@ func buildHoldings(s *Snapshot, m *Meta) []HoldingView {
 			YieldClass:     signClass(h.Yield),
 			DayChange:      signedMoney(h.DayChange),
 			DayChangeClass: signClass(h.DayChange),
+			ShareKey:       sortKey(h.Value.Percent(base)),
+			YieldKey:       sortKey(h.Yield),
+			DayChangeKey:   sortKey(h.DayChange),
 		}})
 	}
 
@@ -126,21 +136,29 @@ func buildHoldings(s *Snapshot, m *Meta) []HoldingView {
 			YieldClass:     signClass(s.GoldYield),
 			DayChange:      signedMoney(s.GoldDayChange),
 			DayChangeClass: signClass(s.GoldDayChange),
+			ShareKey:       sortKey(s.Gold.Percent(base)),
+			YieldKey:       sortKey(s.GoldYield),
+			DayChangeKey:   sortKey(s.GoldDayChange),
 		}})
 	}
 
 	if !s.Cash.IsZero() {
 		// Кеш: доля от той же базы (входит в 100%); доходности нет — по сумме
 		// видно приход дивидендов.
-		// У кеша нет изменения за сегодня — в сортировке он идёт как нулевой.
-		rows = append(rows, holdingRow{tinvest.Dec{}, HoldingView{
-			Ticker:    "RUB",
-			Name:      "Кеш",
-			Price:     dash,
-			Value:     money(s.Cash),
-			Share:     pct(s.Cash.Percent(base)),
-			Yield:     dash,
-			DayChange: dash,
+		// Изменения за сегодня у кеша нет — показываем нулём (зелёным) и
+		// сортируем как нулевой.
+		var zero tinvest.Dec
+		rows = append(rows, holdingRow{zero, HoldingView{
+			Ticker:         "RUB",
+			Name:           "Кеш",
+			Price:          dash,
+			Value:          money(s.Cash),
+			Share:          pct(s.Cash.Percent(base)),
+			Yield:          dash,
+			DayChange:      signedMoney(zero),
+			DayChangeClass: signClass(zero),
+			ShareKey:       sortKey(s.Cash.Percent(base)),
+			DayChangeKey:   sortKey(zero),
 		}})
 	}
 
@@ -165,6 +183,16 @@ func signClass(d tinvest.Dec) string {
 		return "neg"
 	}
 	return "pos"
+}
+
+// sortKey — ключ сортировки столбца: число с точкой, без разделителей тысяч.
+func sortKey(d tinvest.Dec) string { return d.String(2) }
+
+// withPayout добавляет в карточку класса строку полученных выплат.
+func (a *AssetView) withPayout(label string, d tinvest.Dec) {
+	a.PayoutLabel = label
+	a.Payout = signedMoney(d)
+	a.PayoutPos = d.Sign() >= 0
 }
 
 // buildAsset собирает карточку класса активов. Доходность считается к вложенному
