@@ -215,20 +215,20 @@
   <table id="holdings">
     <thead><tr>
       <th>Бумага</th>
+      <th class="num sortable" data-key="day" data-dir="desc">За сегодня</th>
+      <th class="num sortable" data-key="yield">За всё время</th>
       <th class="num hide-sm">Цена</th><th class="num">Стоимость</th>
       <th class="num sortable" data-key="share">Доля</th>
-      <th class="num sortable" data-key="yield">За всё время</th>
-      <th class="num sortable" data-key="day" data-dir="desc">За сегодня</th>
     </tr></thead>
     <tbody>
       {{range .Holdings}}
       <tr data-share="{{.ShareKey}}" data-yield="{{.YieldKey}}" data-day="{{.DayChangeKey}}">
         <td><div class="sec"><span class="dot {{.Class}}"></span><span class="sec-text"><span class="t">{{.Ticker}}</span>{{if .Name}}<span class="n">{{.Name}}</span>{{end}}</span></div></td>
+        <td class="num {{.DayChangeClass}}">{{.DayChange}}</td>
+        <td class="num {{.YieldClass}}">{{.Yield}}</td>
         <td class="num hide-sm">{{.Price}}</td>
         <td class="num">{{.Value}}</td>
         <td class="num">{{.Share}}</td>
-        <td class="num {{.YieldClass}}">{{.Yield}}</td>
-        <td class="num {{.DayChangeClass}}">{{.DayChange}}</td>
       </tr>
       {{end}}
     </tbody>
